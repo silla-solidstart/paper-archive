@@ -1,4 +1,4 @@
-import type { Env } from "./types";
+import type { Env } from "./types.ts";
 
 /** Signed cookies and at-rest encryption, both keyed from SESSION_SECRET. */
 

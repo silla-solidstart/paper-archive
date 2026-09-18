@@ -1,7 +1,7 @@
 import { neon } from "@neondatabase/serverless";
-import type { Env } from "./types";
-import type { Extraction, RetentionStatus } from "./extract";
-import type { OcrResult } from "./docai";
+import type { Env } from "./types.ts";
+import type { Extraction, RetentionStatus } from "./extract.ts";
+import type { OcrResult } from "./docai.ts";
 
 /**
  * Postgres is the filing system. Drive folders are for humans.
@@ -52,6 +52,20 @@ export interface UserRow {
 function sql(env: Env) {
   if (!env.DATABASE_URL) throw new Error("DATABASE_URL not configured");
   return neon(env.DATABASE_URL);
+}
+
+/** LIKE metacharacters in user input mean themselves: "100%" is the string 100%. */
+export function escapeLike(input: string): string {
+  return input.replace(/[\\%_]/g, (m) => "\\" + m);
+}
+
+export async function pingDatabase(env: Env): Promise<boolean> {
+  try {
+    await sql(env).query("SELECT 1", []);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function hasDatabase(env: Env): boolean {
@@ -199,7 +213,7 @@ export async function searchDocuments(
   // ILIKE with a leading wildcard is served by the trigram GIN indexes and
   // works on Japanese, which tsvector does not. Escape the LIKE metacharacters
   // so a search for "100%" means the string "100%".
-  const pattern = "%" + query.replace(/[\\%_]/g, (m) => "\\" + m) + "%";
+  const pattern = "%" + escapeLike(query) + "%";
   const rows = await q.query(
     `SELECT ${LIST_COLUMNS}
      FROM documents
@@ -223,6 +237,15 @@ export async function getDocument(
     [userId, id],
   );
   return (rows as DocumentRow[])[0] ?? null;
+}
+
+/** Removes the index row. Returns the Drive file id so the caller can trash it. */
+export async function deleteDocument(env: Env, userId: string, id: string): Promise<{ drive_file_id: string | null } | null> {
+  const rows = await sql(env).query(
+    `DELETE FROM documents WHERE user_id = $1 AND id = $2 RETURNING drive_file_id`,
+    [userId, id],
+  );
+  return (rows as Array<{ drive_file_id: string | null }>)[0] ?? null;
 }
 
 export async function listActions(

@@ -1,5 +1,6 @@
-import type { Env } from "./types";
-import { getAccessToken } from "./google-auth";
+import type { Env } from "./types.ts";
+import { getAccessToken } from "./google-auth.ts";
+import { UpstreamError, withRetry } from "./retry.ts";
 
 /**
  * Document AI is the canonical OCR layer: it answers "what text is actually on
@@ -42,21 +43,20 @@ export async function ocr(
     `/processors/${env.GCP_DOCAI_PROCESSOR_ID}` +
     `/processorVersions/${env.GCP_DOCAI_PROCESSOR_VERSION}:process`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      skipHumanReview: true,
-      rawDocument: { mimeType, content: toBase64(content) },
-    }),
+  const body_ = JSON.stringify({
+    skipHumanReview: true,
+    rawDocument: { mimeType, content: toBase64(content) },
   });
 
-  if (!res.ok) {
-    throw new Error(`Document AI failed (${res.status}): ${await res.text()}`);
-  }
+  const res = await withRetry("documentai", async () => {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: body_,
+    });
+    if (!r.ok) throw new UpstreamError("documentai", r.status, await r.text());
+    return r;
+  });
 
   const body = (await res.json()) as {
     document?: {

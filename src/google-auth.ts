@@ -1,4 +1,4 @@
-import type { Env } from "./types";
+import type { Env } from "./types.ts";
 
 /**
  * Service-account auth for the Cloudflare Workers runtime.

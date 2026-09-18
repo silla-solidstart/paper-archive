@@ -138,27 +138,72 @@ explicitly in config rather than trusting the processor default.
 
 ---
 
-## Handoff — what is left, in order (2026-09-18)
+## Handoff — what needs you (2026-09-18, evening)
 
-Everything below needs you; nothing else does.
+Secrets live in **GCP Secret Manager** in `solidstart-paper-archive`. `scripts/dev.sh`
+pulls them into a temporary `.dev.vars` for local runs; `scripts/sync-secrets.sh` pushes
+them to Cloudflare before a deploy. Nothing secret is in the repo or in a file that
+survives the session. Already created there: `APP_BEARER_TOKEN`, `SESSION_SECRET`.
 
-1. `cp .dev.vars.example .dev.vars`, then fill in, in this order:
-   - `APP_BEARER_TOKEN` and `SESSION_SECRET` (`openssl rand -base64 32` each)
-   - `DATABASE_URL` from Neon, then `psql "$DATABASE_URL" -f migrations/0001_init.sql`
-     and check `pg_trgm` created without error
-   - `ANTHROPIC_API_KEY`
-   - service account key: `gcloud iam service-accounts keys create .secrets/gcp-sa.json --iam-account=paper-archive-worker@solidstart-paper-archive.iam.gserviceaccount.com`,
-     then copy `client_email` → `GCP_SA_CLIENT_EMAIL` and `private_key` → `GCP_SA_PRIVATE_KEY`
-     (the literal `\n` sequences in the JSON are fine as-is; the code normalises them)
-2. `npx wrangler dev`, open http://localhost:8787, open the token disclosure, paste the
-   bearer token, scan a real 納税通知書. This exercises OCR → Claude → Neon with no OAuth.
-   **This is the first time the extraction call runs.** Expect to tune the prompt.
-3. Console-only: consent screen (External, **published**) and the OAuth web client with
-   redirect URIs `https://pa.solidstart.jp/auth/callback` and
-   `http://localhost:8787/auth/callback`. Put client id/secret in `.dev.vars`.
-4. Sign in with Google on localhost, scan again: this is the first run of the OAuth
-   exchange and the Drive upload. Check `Paper Archive/2026/09/` appears in your Drive.
-5. `npx wrangler secret put` for each secret, `npx wrangler deploy`, confirm
-   https://pa.solidstart.jp/health. Deploy is deliberately not in the allowlist.
-6. Connect the MCP server to Claude: URL `https://pa.solidstart.jp/mcp`, header
-   `Authorization: Bearer <APP_BEARER_TOKEN>`. Ask it "what bills are due?".
+Run the commands below **in your own terminal, not via `!`**, so the values never enter
+the Claude session transcript.
+
+### 1. The service-account key (blocked by org policy + a permission I can't grant myself)
+
+Your org enforces `iam.managed.disableServiceAccountKeyCreation`. You chose a
+project-scoped exception. Setting it needs `orgpolicy.policyAdmin`, which your account
+lacks and which the agent was (correctly) refused permission to grant. Sequence:
+
+```bash
+ORG=7833859326; P=solidstart-paper-archive; PN=318291773922; ME=user:silla@solidstart.jp
+gcloud organizations add-iam-policy-binding $ORG --member=$ME --role=roles/orgpolicy.policyAdmin
+sleep 30   # IAM propagation
+printf 'name: projects/%s/policies/iam.managed.disableServiceAccountKeyCreation\nspec:\n  rules:\n  - enforce: false\n' $PN > /tmp/policy.yaml
+gcloud org-policies set-policy /tmp/policy.yaml --project=$P
+sleep 30
+gcloud iam service-accounts keys create /tmp/sa.json --iam-account=paper-archive-worker@$P.iam.gserviceaccount.com --project=$P
+gcloud secrets create GCP_SA_KEY_JSON --project=$P --replication-policy=automatic --data-file=/tmp/sa.json
+rm /tmp/sa.json /tmp/policy.yaml
+# least privilege: the override is a one-time act
+gcloud organizations remove-iam-policy-binding $ORG --member=$ME --role=roles/orgpolicy.policyAdmin
+```
+
+Rotate this key every 90 days (`keys create` → new secret version → `scripts/sync-secrets.sh`
+→ delete the old key). Keys never expire on their own; that is why the policy exists.
+
+### 2. The other secrets
+
+```bash
+P=solidstart-paper-archive; mk() { printf '%s' "$2" | gcloud secrets create "$1" --project=$P --replication-policy=automatic --data-file=-; }
+mk DATABASE_URL        'postgres://…'                 # Neon → pooled connection string
+mk ANTHROPIC_API_KEY   'sk-ant-…'                     # console.anthropic.com
+```
+Then the two console-only OAuth steps (consent screen External + **published**; web client
+with redirect URIs `https://pa.solidstart.jp/auth/callback` and
+`http://localhost:8787/auth/callback`), and:
+```bash
+mk GOOGLE_OAUTH_CLIENT_ID     '…apps.googleusercontent.com'
+mk GOOGLE_OAUTH_CLIENT_SECRET '…'
+```
+
+### 3. Then tell the agent. It can do the rest without you:
+
+- `npm run migrate` — applies `migrations/` over the Neon driver (no `psql` on this
+  machine) and reports whether `pg_trgm` exists.
+- `scripts/dev.sh` and a real scan through `/api/process` — the first execution of the
+  Claude extraction call and the service-account path against Google. Billable; the
+  agent caps itself at ~20 test runs per session (≈¥100) unless told otherwise.
+- Sign-in and Drive filing need a browser: that first run is yours, in **Chrome**
+  (Safari drops the `Secure` session cookie on `http://localhost`).
+
+### 4. Deploy
+
+Laptop for now: `scripts/sync-secrets.sh && npx wrangler deploy` (after `npx wrangler login`
+once). Then https://pa.solidstart.jp/health, sign in there, and the **phone test** — camera,
+HEIC→JPEG via canvas, Add to Home Screen.
+
+CI/CD is written (`.github/workflows/deploy.yml`: typecheck + tests + JWT self-test on
+every push, deploy `main` to Cloudflare). To turn it on: create the GitHub repo
+(github.com/new → `paper-archive`, private, empty; the SSH key is already authorised), push,
+and add repo secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit) and
+`CLOUDFLARE_ACCOUNT_ID`. Worker secrets stay in Cloudflare, set once by the sync script.

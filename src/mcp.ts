@@ -1,9 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
-import type { Env } from "./types";
-import { ensureLocalUser, getDocument, listActions, searchDocuments, updateDocumentRetention } from "./db";
-import { RETENTION_STATUSES } from "./extract";
+import type { Env } from "./types.ts";
+import { ensureLocalUser, getDocument, listActions, searchDocuments, updateDocumentRetention } from "./db.ts";
+import { RETENTION_STATUSES } from "./extract.ts";
 
 /**
  * MCP: the archive as a tool for Claude and other assistants.

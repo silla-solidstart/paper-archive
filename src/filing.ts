@@ -1,8 +1,8 @@
-import type { Env } from "./types";
-import type { UserRow } from "./db";
-import type { Extraction } from "./extract";
-import { ensureFolderPath, ensureRootFolder, uploadFile } from "./drive";
-import { userAccessToken } from "./oauth";
+import type { Env } from "./types.ts";
+import type { UserRow } from "./db.ts";
+import type { Extraction } from "./extract.ts";
+import { ensureFolderPath, ensureRootFolder, uploadFile } from "./drive.ts";
+import { userAccessToken } from "./oauth.ts";
 
 /**
  * Filing: Paper Archive / YYYY / MM / YYYY-MM-DD_issuer_title.ext

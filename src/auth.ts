@@ -1,4 +1,4 @@
-import type { Env } from "./types";
+import type { Env } from "./types.ts";
 
 /**
  * Interim API auth: a single shared bearer token, until Google sign-in exists.

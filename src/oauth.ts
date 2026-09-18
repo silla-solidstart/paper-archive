@@ -1,6 +1,6 @@
-import type { Env } from "./types";
-import type { UserRow } from "./db";
-import { updateUserTokens, upsertGoogleUser } from "./db";
+import type { Env } from "./types.ts";
+import type { UserRow } from "./db.ts";
+import { updateUserTokens, upsertGoogleUser } from "./db.ts";
 import {
   b64url,
   clearSessionCookie,
@@ -12,7 +12,7 @@ import {
   sign,
   unb64url,
   verify,
-} from "./session";
+} from "./session.ts";
 
 /**
  * Sign in with Google → drive.file grant → session cookie.

@@ -74,11 +74,20 @@ users' Drives. Do it with a structural self-check on the generated xref.
 
 ## What has been verified vs. only typechecked
 
-Verified against the real service: Document AI OCR (Japanese), the
-service-account JWT path (against a throwaway key), routing/auth/size caps
-(local smoke tests). **Never executed:** the Claude extraction call, the
-Neon queries, the OAuth exchange, and the Drive upload. Each needs a
-credential the user holds. Treat those as first-run risks, not done.
+Verified against the real service: Document AI OCR (Japanese, via user
+credentials). Verified locally: the service-account JWT path (throwaway key),
+every route's auth/size/type handling and the PWA assets (wrangler dev smoke
+tests), and the pure logic (`npm test`). **Never executed:** the Claude
+extraction call, the Neon queries and migration runner, the OAuth exchange,
+the Drive upload, and the service-account path against real Google (blocked
+on the org-policy exception in docs/setup.md). Treat those as first-run risks.
+
+## Secrets
+
+GCP Secret Manager in `solidstart-paper-archive` is the single source.
+`scripts/dev.sh` materialises a temporary `.dev.vars`; `scripts/sync-secrets.sh`
+pushes to Cloudflare. The agent may *use* secrets through those scripts but
+must not print them or read `.dev.vars` directly.
 
 ## Working agreement
 

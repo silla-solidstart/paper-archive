@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import type { Env } from "./types";
+import type { Env } from "./types.ts";
 
 /**
  * The LLM answers "what does this document mean?" — never "what text is on it".

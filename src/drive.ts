@@ -1,6 +1,7 @@
-import type { Env } from "./types";
-import type { UserRow } from "./db";
-import { updateUserDriveFolder } from "./db";
+import type { Env } from "./types.ts";
+import type { UserRow } from "./db.ts";
+import { updateUserDriveFolder } from "./db.ts";
+import { UpstreamError, withRetry } from "./retry.ts";
 
 /**
  * The user's Google Drive is the permanent store. We hold a file id, never
@@ -16,9 +17,21 @@ export const ROOT_FOLDER_NAME = "Paper Archive";
 async function driveFetch(token: string, url: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${token}`);
-  const res = await fetch(url, { ...init, headers });
-  if (!res.ok && res.status !== 404) throw new Error(`Drive ${res.status}: ${await res.text()}`);
-  return res;
+  // Blob bodies can be re-sent; a stream could not. Everything here is a Blob or string.
+  return withRetry("drive", async () => {
+    const res = await fetch(url, { ...init, headers });
+    if (!res.ok && res.status !== 404) throw new UpstreamError("drive", res.status, await res.text());
+    return res;
+  });
+}
+
+/** Moves a file to the user's Drive trash. Missing files are treated as done. */
+export async function trashFile(token: string, id: string): Promise<void> {
+  await driveFetch(token, `${API}/files/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trashed: true }),
+  });
 }
 
 async function createFolder(token: string, name: string, parentId?: string): Promise<string> {
