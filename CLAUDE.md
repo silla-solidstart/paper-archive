@@ -65,12 +65,13 @@ but the Drive upload fails, the document is indexed with `status = failed` and
 the only recovery is a re-scan. The UI says so. When Workflows arrive, add R2
 as the staging store and this becomes a real retry.
 
-## Known gap: scans are filed as JPEG, not PDF
+## Filing format
 
-The brief's pipeline says "Generate PDF". Filing currently uploads the downscaled
-JPEG (or the original PDF) as-is. A JPEG-in-PDF wrapper is ~60 lines of hand-built
-PDF with byte-exact xref offsets; it was deferred rather than shipped unverified into
-users' Drives. Do it with a structural self-check on the generated xref.
+JPEG scans are filed as single-page PDFs with the JPEG embedded verbatim
+(`src/pdf.ts`, no library, page sized to A4). The wrapper is tested two ways:
+every xref offset is checked byte-exactly, and macOS CoreGraphics (`sips`)
+opens the result as an independent reader. PNG/WebP are uploaded as-is
+because wrapping them would need a decoder; the PWA only ever sends JPEG or PDF.
 
 ## What has been verified vs. only typechecked
 

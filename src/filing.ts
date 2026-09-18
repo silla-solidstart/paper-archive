@@ -3,6 +3,7 @@ import type { UserRow } from "./db.ts";
 import type { Extraction } from "./extract.ts";
 import { ensureFolderPath, ensureRootFolder, uploadFile } from "./drive.ts";
 import { userAccessToken } from "./oauth.ts";
+import { jpegToPdf } from "./pdf.ts";
 
 /**
  * Filing: Paper Archive / YYYY / MM / YYYY-MM-DD_issuer_title.ext
@@ -45,12 +46,23 @@ export async function fileToDrive(
 ): Promise<Filed> {
   const token = await userAccessToken(env, user);
   const today = new Date().toISOString().slice(0, 10);
-  const filename = buildFilename(x, mimeType, today);
+
+  // Photos are filed as single-page PDFs with the JPEG embedded verbatim, so
+  // Drive shows a document rather than a picture. PDFs pass through. PNG and
+  // WebP would need decoding, so they are uploaded as-is.
+  let payload = bytes;
+  let uploadType = mimeType;
+  if (mimeType === "image/jpeg") {
+    payload = jpegToPdf(new Uint8Array(bytes)).buffer as ArrayBuffer;
+    uploadType = "application/pdf";
+  }
+
+  const filename = buildFilename(x, uploadType, today);
   const [yyyy, mm] = (x.document_date ?? today).split("-");
 
   const root = await ensureRootFolder(env, user, token);
   const folder = await ensureFolderPath(token, root, [yyyy, mm]);
-  const uploaded = await uploadFile(token, folder, filename, mimeType, bytes);
+  const uploaded = await uploadFile(token, folder, filename, uploadType, payload);
 
   return {
     fileId: uploaded.id,
