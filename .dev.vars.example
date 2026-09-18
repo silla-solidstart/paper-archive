@@ -1,20 +1,30 @@
-# Copy to .dev.vars and fill in. .dev.vars is gitignored — never commit real values.
+# Copy to .dev.vars and fill in the blanks. .dev.vars is gitignored.
+# Non-secret values are pre-filled — they are project config, not credentials.
 
-# Google Cloud — Document AI
-GCP_PROJECT_ID=
-GCP_DOCAI_LOCATION=us
-GCP_DOCAI_PROCESSOR_ID=
-# Service account, for the Worker to call Document AI (JWT signed via Web Crypto)
-GCP_SA_CLIENT_EMAIL=
+# --- Google Cloud: Document AI (provisioned) ---
+GCP_PROJECT_ID=solidstart-paper-archive-dev
+GCP_PROJECT_NUMBER=817649792332
+GCP_DOCAI_LOCATION=asia-southeast1
+GCP_DOCAI_PROCESSOR_ID=642b4fe235c0b1e3
+# Pin the version explicitly rather than relying on the processor default, so a
+# Google-side default change cannot silently alter extraction quality.
+GCP_DOCAI_PROCESSOR_VERSION=pretrained-ocr-v2.1.1-2025-01-31
+
+# --- Service account (SECRET — do not put the private key in this file) ---
+# Create the key yourself:
+#   gcloud iam service-accounts keys create .secrets/gcp-sa.json \
+#     --iam-account=paper-archive-worker@solidstart-paper-archive-dev.iam.gserviceaccount.com
+# then load it with `wrangler secret put GCP_SA_PRIVATE_KEY`.
+GCP_SA_CLIENT_EMAIL=paper-archive-worker@solidstart-paper-archive-dev.iam.gserviceaccount.com
 GCP_SA_PRIVATE_KEY=
 
-# Google OAuth — Sign in with Google + drive.file
+# --- Google OAuth (console-only; no API exists) ---
 GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
-GOOGLE_OAUTH_REDIRECT_URI=
+GOOGLE_OAUTH_REDIRECT_URI=https://pa.solidstart.jp/auth/callback
 
-# Anthropic — billed separately from any Claude subscription
+# --- Anthropic (billed separately from any Claude subscription) ---
 ANTHROPIC_API_KEY=
 
-# Neon Postgres
+# --- Neon ---
 DATABASE_URL=

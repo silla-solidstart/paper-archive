@@ -12,24 +12,24 @@ Fill values into `.dev.vars` (copy from `.dev.vars.example`) as you go. Never co
 `solidstart.jp` is on Google Workspace, so the organization node already exists and
 projects created by that account land under it automatically.
 
-- [ ] Sign in to console.cloud.google.com **as `silla@solidstart.jp`**, in a browser
+- [x] Sign in to console.cloud.google.com **as `silla@solidstart.jp`**, in a browser
       profile separate from the personal gmail account. A project created under the
       wrong identity lands outside the org — the tell is that the consent screen later
       offers no Internal/External choice.
-- [ ] Confirm you hold **Organization Administrator** in IAM. Workspace super admin is
+- [x] Confirm you hold **Organization Administrator** in IAM. Workspace super admin is
       a different role; it is usually seeded but verify it.
-- [ ] Create a dedicated project `paper-archive-dev`. Do not share a project with other
+- [x] Create a dedicated project `paper-archive-dev`. Do not share a project with other
       business work. A separate prod project comes later.
-- [ ] Link a **business** billing account (tax: you want the 適格請求書, not a personal
+- [x] Link a **business** billing account (tax: you want the 適格請求書, not a personal
       card receipt).
-- [ ] **Set a budget alert before enabling any API.** ¥3,000, email at 50/90/100%.
+- [x] **Set a budget alert before enabling any API.** ¥3,000, email at 50/90/100%.
 
 ### Document AI (OCR)
 
-- [ ] Enable `documentai.googleapis.com`
-- [ ] Create a **Document OCR** processor (Enterprise variant). Region: `us`, `eu`, or
+- [x] Enable `documentai.googleapis.com`
+- [x] Create a **Document OCR** processor (Enterprise variant). Region: `us`, `eu`, or
       `asia-northeast1` → `GCP_DOCAI_LOCATION`, `GCP_DOCAI_PROCESSOR_ID`
-- [ ] Create a service account, grant it Document AI User, download a JSON key
+- [x] Create a service account, grant it Document AI User, download a JSON key
       → `GCP_SA_CLIENT_EMAIL`, `GCP_SA_PRIVATE_KEY`
 - [ ] Keep the JSON key out of the repo. `*-service-account*.json` is gitignored.
 
@@ -39,7 +39,7 @@ users are not on the solidstart.jp domain.
 
 ### Sign-in + Drive (same project)
 
-- [ ] Enable `drive.googleapis.com`
+- [x] Enable `drive.googleapis.com`
 - [ ] Consent screen: user type **External**, status **Testing**. Not Internal —
       Internal restricts sign-in to solidstart.jp accounts, so no real user could ever
       use the app. Testing allows 100 test users with no verification review.
@@ -85,10 +85,40 @@ gh auth login
 Four checks. Each failure here surfaces as a confusing error inside application code
 later, which is what makes the setup evening feel like it ate a Saturday.
 
-- [ ] **Document AI**: curl one photo of a Japanese document through the processor and
+- [x] **Document AI**: verified 2026-09-18 — OCRd the 6-page brief PDF via Enterprise OCR
+      v2.1.1 in asia-southeast1, returned 固定資産税納税通知書 / 上越市 / 令和 / 納期限 correctly.
+- [ ] **Document AI via service account JWT** (the runtime path — the check above used
+      user credentials): curl one photo of a Japanese document through the processor and
       read the OCR text. Requires the JWT signing path — the `googleapis` SDK does not
       run on Workers, so build the JWT and sign RS256 via Web Crypto. Write this now,
       not at midnight on Saturday.
 - [ ] **Claude**: one request returning JSON matching the extraction schema
 - [ ] **Neon**: `psql "$DATABASE_URL" -c 'select 1'`
 - [ ] **Cloudflare**: hello-world Worker live on `*.workers.dev`
+
+---
+
+## Provisioned state (2026-09-18)
+
+| Resource | Value |
+|---|---|
+| Org | `solidstart.jp` (7833859326) |
+| Project | `solidstart-paper-archive-dev` (817649792332), under the org |
+| Billing | `01B638-95C831-492E58`, JPY, org-parented, **linked** |
+| Budget | `paper-archive-dev`, ¥3,000, alerts at 50/90/100% |
+| APIs | documentai, drive, iam, billingbudgets |
+| Processor | `642b4fe235c0b1e3` @ `asia-southeast1` |
+| Version | `pretrained-ocr-v2.1.1-2025-01-31` (Enterprise OCR) |
+| Service account | `paper-archive-worker@…`, `roles/documentai.apiUser` |
+
+**Region note:** Document AI has no `asia-northeast1` (Tokyo). Available regions for
+this project are us, eu, asia-south1, asia-southeast1, australia-southeast1,
+europe-west2, europe-west3, northamerica-northeast1, us-east7. `asia-southeast1`
+(Singapore) is the closest to Japan and keeps users' documents in-region, which
+matters for personal tax paperwork. Switching regions later is one API call; stored
+OCR text is unaffected.
+
+**Version note:** the processor was created with `pretrained-ocr-v1.0-2020-09-23` as
+default (Google's "Stable"). That is the old base OCR, not Enterprise Document OCR.
+It was switched to v2.1.1. Worth A/B-ing both on the real corpus — v1.0 is labelled
+Stable and v2.1.1 Release Candidate, but v2.1.1 is the Enterprise line the brief calls for.

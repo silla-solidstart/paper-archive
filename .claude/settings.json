@@ -37,7 +37,6 @@
       "Bash(wrangler publish:*)",
       "Bash(wrangler secret:*)",
       "Bash(rm -rf:*)",
-      "Bash(gcloud:*)",
       "Read(//Users/silla/dev/paper-archive/.dev.vars)",
       "Read(//Users/silla/.ssh/**)"
     ]
