@@ -2,15 +2,23 @@ import type { Env } from "./types";
 import { ocr } from "./docai";
 import { extract } from "./extract";
 import { requireBearer } from "./auth";
+import { handleMcp } from "./mcp";
+import { ensureLocalUser, hasDatabase, insertDocument, listRecent } from "./db";
+
+const EXTRACTION_MODEL = "claude-opus-5";
 
 /**
  * Paper Archive — Cloudflare Worker.
  *
- * Implemented: OCR → extraction, behind a bearer token. Testable with the
- * service account key, an Anthropic key, and APP_BEARER_TOKEN.
+ * Implemented, all behind a bearer token:
+ *   POST /api/process  OCR → extraction → Postgres (when DATABASE_URL is set)
+ *   GET  /api/recent   inbox
+ *   GET  /api/status   which credentials are configured
+ *   *    /mcp          search_documents / get_document / list_actions
+ * Static PWA is served from public/ via Workers assets.
  *
- * Not yet: Google sign-in, Drive filing, Postgres indexing, MCP. Those need
- * the OAuth client, which is console-only. See docs/setup.md.
+ * Not yet: Google sign-in and Drive filing. Both need the OAuth client,
+ * which is console-only. See docs/setup.md.
  */
 
 // Document AI online processing accepts up to ~20 MB. Anything larger fails
@@ -42,9 +50,20 @@ export default {
       return json({ ok: true });
     }
 
-    if (url.pathname.startsWith("/api/")) {
+    if (url.pathname.startsWith("/api/") || url.pathname === "/mcp") {
       const denied = await requireBearer(request, env);
       if (denied) return denied;
+    }
+
+    if (url.pathname === "/mcp") {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      return handleMcp(request, env);
+    }
+
+    if (url.pathname === "/api/recent") {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      const userId = await ensureLocalUser(env);
+      return json({ documents: await listRecent(env, userId) });
     }
 
     // Authenticated: which credentials are present, for setup debugging.
@@ -102,7 +121,17 @@ export default {
 
         const extraction = await extract(env, result.text, image);
 
+        // Index it, if there is somewhere to index it. Without DATABASE_URL the
+        // endpoint still works as a pure OCR+extract tester.
+        let id: string | null = null;
+        if (hasDatabase(env)) {
+          const userId = await ensureLocalUser(env);
+          const filename = decodeURIComponent(request.headers.get("X-Filename") ?? "") || null;
+          id = await insertDocument(env, userId, filename, result, extraction, EXTRACTION_MODEL);
+        }
+
         return json({
+          id,
           ocr: {
             provider: result.provider,
             pages: result.pageCount,

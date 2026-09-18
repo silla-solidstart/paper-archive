@@ -14,8 +14,23 @@ See [docs/setup.md](docs/setup.md).
 ```bash
 npm install
 cp .dev.vars.example .dev.vars   # fill in credentials — never commit this
-npx wrangler dev
+npx wrangler dev                 # http://localhost:8787
 ```
+
+Everything under `/api/*` and `/mcp` requires `Authorization: Bearer $APP_BEARER_TOKEN`.
+
+```bash
+# OCR + extraction on a real document (stores it when DATABASE_URL is set)
+curl -X POST localhost:8787/api/process \
+  -H "Authorization: Bearer $APP_BEARER_TOKEN" \
+  -H "Content-Type: image/jpeg" --data-binary @scan.jpg
+
+# Inbox
+curl localhost:8787/api/recent -H "Authorization: Bearer $APP_BEARER_TOKEN"
+```
+
+MCP endpoint for Claude and other assistants: `POST /mcp` (Streamable HTTP, stateless),
+same bearer token. Tools: `search_documents`, `get_document`, `list_actions`.
 
 ## Verify the service-account crypto without credentials
 

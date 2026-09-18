@@ -93,6 +93,8 @@ later, which is what makes the setup evening feel like it ate a Saturday.
       read the OCR text. Requires the JWT signing path — the `googleapis` SDK does not
       run on Workers, so build the JWT and sign RS256 via Web Crypto. Write this now,
       not at midnight on Saturday.
+- [ ] **App token**: `openssl rand -base64 32` → `APP_BEARER_TOKEN` in `.dev.vars`.
+      Every `/api/*` and `/mcp` route fails closed without it.
 - [ ] **Claude**: one request returning JSON matching the extraction schema
 - [ ] **Neon**: `psql "$DATABASE_URL" -c 'select 1'`
 - [ ] **Cloudflare**: hello-world Worker live on `*.workers.dev`
