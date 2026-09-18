@@ -134,3 +134,31 @@ explicitly in config rather than trusting the processor default.
 
 **Predecessor:** `solidstart-paper-archive-dev` (817649792332) was the first attempt and is
 `DELETE_REQUESTED` as of 2026-09-18; recoverable via `gcloud projects undelete` for 30 days.
+
+
+---
+
+## Handoff — what is left, in order (2026-09-18)
+
+Everything below needs you; nothing else does.
+
+1. `cp .dev.vars.example .dev.vars`, then fill in, in this order:
+   - `APP_BEARER_TOKEN` and `SESSION_SECRET` (`openssl rand -base64 32` each)
+   - `DATABASE_URL` from Neon, then `psql "$DATABASE_URL" -f migrations/0001_init.sql`
+     and check `pg_trgm` created without error
+   - `ANTHROPIC_API_KEY`
+   - service account key: `gcloud iam service-accounts keys create .secrets/gcp-sa.json --iam-account=paper-archive-worker@solidstart-paper-archive.iam.gserviceaccount.com`,
+     then copy `client_email` → `GCP_SA_CLIENT_EMAIL` and `private_key` → `GCP_SA_PRIVATE_KEY`
+     (the literal `\n` sequences in the JSON are fine as-is; the code normalises them)
+2. `npx wrangler dev`, open http://localhost:8787, open the token disclosure, paste the
+   bearer token, scan a real 納税通知書. This exercises OCR → Claude → Neon with no OAuth.
+   **This is the first time the extraction call runs.** Expect to tune the prompt.
+3. Console-only: consent screen (External, **published**) and the OAuth web client with
+   redirect URIs `https://pa.solidstart.jp/auth/callback` and
+   `http://localhost:8787/auth/callback`. Put client id/secret in `.dev.vars`.
+4. Sign in with Google on localhost, scan again: this is the first run of the OAuth
+   exchange and the Drive upload. Check `Paper Archive/2026/09/` appears in your Drive.
+5. `npx wrangler secret put` for each secret, `npx wrangler deploy`, confirm
+   https://pa.solidstart.jp/health. Deploy is deliberately not in the allowlist.
+6. Connect the MCP server to Claude: URL `https://pa.solidstart.jp/mcp`, header
+   `Authorization: Bearer <APP_BEARER_TOKEN>`. Ask it "what bills are due?".

@@ -31,9 +31,9 @@ These were decided deliberately. Do not revisit them without the user saying so.
 
 | Layer | Choice |
 |---|---|
-| Frontend | React/Next.js PWA (iOS + Android + desktop) |
+| Frontend | Static HTML PWA in `public/`, served by Workers assets. The brief proposed Next.js; one page has not needed it. |
 | Backend | Cloudflare Workers |
-| Temp storage | Cloudflare R2 (deferred for MVP — in-memory is fine without Workflows) |
+| Temp storage | None yet. R2 deferred with Workflows; see "Known gap" below. |
 | Permanent storage | User's Google Drive |
 | Database | Neon Postgres |
 | OCR | Google Document AI — Enterprise Document OCR |
@@ -57,6 +57,28 @@ rate-limit in production.
 - **Japanese documents are the point.** Vertical text, 和暦 dates, municipal notice layouts,
   and 納税通知書 → "pay by X" patterns are where competitors fail. Test against real
   documents, not synthetic ones.
+
+## Known gap: no retry without R2
+
+R2 was deferred, so the Worker keeps no bytes. If OCR and extraction succeed
+but the Drive upload fails, the document is indexed with `status = failed` and
+the only recovery is a re-scan. The UI says so. When Workflows arrive, add R2
+as the staging store and this becomes a real retry.
+
+## Known gap: scans are filed as JPEG, not PDF
+
+The brief's pipeline says "Generate PDF". Filing currently uploads the downscaled
+JPEG (or the original PDF) as-is. A JPEG-in-PDF wrapper is ~60 lines of hand-built
+PDF with byte-exact xref offsets; it was deferred rather than shipped unverified into
+users' Drives. Do it with a structural self-check on the generated xref.
+
+## What has been verified vs. only typechecked
+
+Verified against the real service: Document AI OCR (Japanese), the
+service-account JWT path (against a throwaway key), routing/auth/size caps
+(local smoke tests). **Never executed:** the Claude extraction call, the
+Neon queries, the OAuth exchange, and the Drive upload. Each needs a
+credential the user holds. Treat those as first-run risks, not done.
 
 ## Working agreement
 

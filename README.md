@@ -29,8 +29,14 @@ curl -X POST localhost:8787/api/process \
 curl localhost:8787/api/recent -H "Authorization: Bearer $APP_BEARER_TOKEN"
 ```
 
+Other routes, session cookie or bearer: `GET /api/me`, `GET /api/documents/:id`,
+`PATCH /api/documents/:id/retention` with `{ "retention": "keep_original", "reason": "..." }`.
+
 MCP endpoint for Claude and other assistants: `POST /mcp` (Streamable HTTP, stateless),
-same bearer token. Tools: `search_documents`, `get_document`, `list_actions`.
+bearer token only. Tools: `search_documents`, `get_document`, `list_actions`,
+`set_retention_decision`.
+
+Sign in: `GET /auth/login` → Google → `/auth/callback` sets a 30-day session cookie.
 
 ## Verify the service-account crypto without credentials
 

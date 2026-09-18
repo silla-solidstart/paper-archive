@@ -44,6 +44,14 @@ export const CATEGORIES = [
   "other",
 ] as const;
 
+export const RETENTION_STATUSES = [
+  "digital_sufficient",
+  "keep_temporarily",
+  "keep_original",
+  "unsure",
+] as const;
+export type RetentionStatus = (typeof RETENTION_STATUSES)[number];
+
 export const ExtractionSchema = z.object({
   title: z.string().describe("Document title as printed, in its original language"),
   document_type: z.enum(DOCUMENT_TYPES).describe("Closest type; use other if none fits"),
@@ -61,12 +69,7 @@ export const ExtractionSchema = z.object({
     .describe("payment, appointment, renewal, signature, response, cancellation, or null"),
   action_date: z.string().nullable().describe("Deadline as ISO YYYY-MM-DD"),
 
-  retention: z.enum([
-    "digital_sufficient",
-    "keep_temporarily",
-    "keep_original",
-    "unsure",
-  ]),
+  retention: z.enum(RETENTION_STATUSES),
   retention_reason: z.string().describe("Why, in one sentence"),
 
   categories: z.array(z.enum(CATEGORIES)),

@@ -2,7 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import type { Env } from "./types";
-import { ensureLocalUser, getDocument, listActions, searchDocuments } from "./db";
+import { ensureLocalUser, getDocument, listActions, searchDocuments, updateDocumentRetention } from "./db";
+import { RETENTION_STATUSES } from "./extract";
 
 /**
  * MCP: the archive as a tool for Claude and other assistants.
@@ -64,6 +65,26 @@ function buildServer(env: Env, userId: string): McpServer {
       inputSchema: { limit: z.number().int().min(1).max(100).optional() },
     },
     async ({ limit }) => text(await listActions(env, userId, limit ?? 50)),
+  );
+
+  server.registerTool(
+    "set_retention_decision",
+    {
+      title: "Set retention decision",
+      description:
+        "Record the user's decision about whether the physical original can be " +
+        "discarded. Only call this when the user has explicitly decided — never " +
+        "infer it. Values: digital_sufficient, keep_temporarily, keep_original, unsure.",
+      inputSchema: {
+        id: z.string().uuid(),
+        retention: z.enum(RETENTION_STATUSES),
+        reason: z.string().optional().describe("The user's stated reason, if any"),
+      },
+    },
+    async ({ id, retention, reason }) => {
+      const ok = await updateDocumentRetention(env, userId, id, retention, reason ?? "Decided by user via assistant");
+      return text(ok ? { ok: true, id, retention } : { error: "not found" });
+    },
   );
 
   return server;

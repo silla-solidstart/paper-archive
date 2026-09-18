@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import type { Env } from "./types";
-import type { Extraction } from "./extract";
+import type { Extraction, RetentionStatus } from "./extract";
 import type { OcrResult } from "./docai";
 
 /**
@@ -119,6 +119,22 @@ export async function updateDocumentFiling(
     `UPDATE documents SET drive_file_id = $2, filename = COALESCE($3, filename), status = $4, error = $5 WHERE id = $1`,
     [id, f.driveFileId, f.filename, f.status, f.error],
   );
+}
+
+/** The human's decision overrides the model's. Returns false if not found. */
+export async function updateDocumentRetention(
+  env: Env,
+  userId: string,
+  id: string,
+  retention: RetentionStatus,
+  reason: string,
+): Promise<boolean> {
+  const rows = await sql(env).query(
+    `UPDATE documents SET retention = $3::retention_status, retention_reason = $4
+     WHERE user_id = $1 AND id = $2 RETURNING id`,
+    [userId, id, retention, reason],
+  );
+  return (rows as unknown[]).length > 0;
 }
 
 export async function insertDocument(

@@ -5,13 +5,16 @@ import { requireBearer } from "./auth";
 import { handleMcp } from "./mcp";
 import {
   ensureLocalUser,
+  getDocument,
   getUserById,
   hasDatabase,
   insertDocument,
   listRecent,
   updateDocumentFiling,
+  updateDocumentRetention,
   type UserRow,
 } from "./db";
+import { RETENTION_STATUSES, type RetentionStatus } from "./extract";
 import { callback, login, logout, ReconnectRequired } from "./oauth";
 import { readSession } from "./session";
 import { fileToDrive, type Filed } from "./filing";
@@ -29,8 +32,11 @@ import { fileToDrive, type Filed } from "./filing";
  *   GET  /api/me        current user (session only)
  *   POST /api/process   OCR → extraction → index → Drive (session)
  *   GET  /api/recent    inbox
+ *   GET  /api/documents/:id
+ *   PATCH /api/documents/:id/retention   { retention, reason? } — the human's call
  *   GET  /api/status    which credentials are configured
- *   *    /mcp           search_documents / get_document / list_actions (bearer)
+ *   *    /mcp           search_documents / get_document / list_actions /
+ *                     set_retention_decision (bearer only)
  *
  * Static PWA is served from public/ via Workers assets.
  */
@@ -120,6 +126,29 @@ export default {
       if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
       const userId = caller.user?.id ?? (await ensureLocalUser(env));
       return json({ documents: await listRecent(env, userId) });
+    }
+
+    const doc = path.match(/^\/api\/documents\/([0-9a-f-]{36})(\/retention)?$/);
+    if (doc) {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      const userId = caller.user?.id ?? (await ensureLocalUser(env));
+      const id = doc[1];
+
+      if (!doc[2] && request.method === "GET") {
+        const row = await getDocument(env, userId, id);
+        return row ? json({ document: row }) : json({ error: "not found" }, 404);
+      }
+
+      if (doc[2] && request.method === "PATCH") {
+        const body = (await request.json().catch(() => null)) as { retention?: string; reason?: string } | null;
+        const retention = body?.retention as RetentionStatus | undefined;
+        if (!retention || !(RETENTION_STATUSES as readonly string[]).includes(retention)) {
+          return json({ error: "invalid retention", allowed: RETENTION_STATUSES }, 400);
+        }
+        const ok = await updateDocumentRetention(env, userId, id, retention, body?.reason?.slice(0, 500) || "Decided by user");
+        return ok ? json({ ok: true, id, retention }) : json({ error: "not found" }, 404);
+      }
+      return json({ error: "method not allowed" }, 405);
     }
 
     if (path === "/api/process" && request.method === "POST") {
