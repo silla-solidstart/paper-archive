@@ -1,0 +1,93 @@
+import type { Env } from "./types";
+import type { UserRow } from "./db";
+import { updateUserDriveFolder } from "./db";
+
+/**
+ * The user's Google Drive is the permanent store. We hold a file id, never
+ * the bytes. With drive.file we can only see what we created, so the root
+ * folder id is persisted and children are found by listing under it.
+ */
+
+const API = "https://www.googleapis.com/drive/v3";
+const UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
+const FOLDER = "application/vnd.google-apps.folder";
+export const ROOT_FOLDER_NAME = "Paper Archive";
+
+async function driveFetch(token: string, url: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(url, { ...init, headers });
+  if (!res.ok && res.status !== 404) throw new Error(`Drive ${res.status}: ${await res.text()}`);
+  return res;
+}
+
+async function createFolder(token: string, name: string, parentId?: string): Promise<string> {
+  const res = await driveFetch(token, `${API}/files?fields=id`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, mimeType: FOLDER, ...(parentId ? { parents: [parentId] } : {}) }),
+  });
+  return ((await res.json()) as { id: string }).id;
+}
+
+async function findChildFolder(token: string, parentId: string, name: string): Promise<string | null> {
+  const escaped = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const q = `'${parentId}' in parents and name = '${escaped}' and mimeType = '${FOLDER}' and trashed = false`;
+  const res = await driveFetch(token, `${API}/files?fields=files(id)&pageSize=1&q=${encodeURIComponent(q)}`);
+  const body = (await res.json()) as { files?: Array<{ id: string }> };
+  return body.files?.[0]?.id ?? null;
+}
+
+async function folderExists(token: string, id: string): Promise<boolean> {
+  const res = await driveFetch(token, `${API}/files/${id}?fields=id,trashed`);
+  if (res.status === 404) return false;
+  return !((await res.json()) as { trashed?: boolean }).trashed;
+}
+
+/** The user's root archive folder, recreated if they deleted it. */
+export async function ensureRootFolder(env: Env, user: UserRow, token: string): Promise<string> {
+  if (user.drive_folder_id && (await folderExists(token, user.drive_folder_id))) {
+    return user.drive_folder_id;
+  }
+  const id = await createFolder(token, ROOT_FOLDER_NAME);
+  await updateUserDriveFolder(env, user.id, id);
+  return id;
+}
+
+export async function ensureFolderPath(token: string, rootId: string, parts: string[]): Promise<string> {
+  let parent = rootId;
+  for (const name of parts) {
+    parent = (await findChildFolder(token, parent, name)) ?? (await createFolder(token, name, parent));
+  }
+  return parent;
+}
+
+export interface UploadedFile {
+  id: string;
+  name: string;
+  webViewLink: string;
+}
+
+export async function uploadFile(
+  token: string,
+  folderId: string,
+  name: string,
+  mimeType: string,
+  bytes: ArrayBuffer,
+): Promise<UploadedFile> {
+  const boundary = "pa-" + crypto.randomUUID();
+  const metadata = JSON.stringify({ name, parents: [folderId] });
+  const CRLF = "\r\n";
+  const body = new Blob([
+    `--${boundary}${CRLF}Content-Type: application/json; charset=UTF-8${CRLF}${CRLF}${metadata}${CRLF}`,
+    `--${boundary}${CRLF}Content-Type: ${mimeType}${CRLF}${CRLF}`,
+    bytes,
+    `${CRLF}--${boundary}--`,
+  ]);
+  const res = await driveFetch(token, `${UPLOAD}?uploadType=multipart&fields=id,name,webViewLink`, {
+    method: "POST",
+    headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  return (await res.json()) as UploadedFile;
+}

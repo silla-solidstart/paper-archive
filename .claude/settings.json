@@ -29,8 +29,7 @@
       "Bash(npx tsc:*)",
       "Bash(npx wrangler dev:*)",
       "Bash(npx wrangler types:*)",
-      "Bash(node scripts/:*)",
-      "Bash(node -p:*)"
+      "Bash(node scripts/:*)"
     ],
     "deny": [
       "Bash(git push:*)",

@@ -32,6 +32,11 @@ CREATE TABLE users (
   -- folder id cannot be recovered by searching Drive. This column is the only
   -- pointer back to the user's archive folder.
   drive_folder_id text,
+  -- Google OAuth. The refresh token is AES-GCM encrypted with a key derived
+  -- from SESSION_SECRET; the access token is short-lived and stored plain.
+  google_refresh_token_enc  text,
+  google_access_token       text,
+  google_token_expires_at   timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );

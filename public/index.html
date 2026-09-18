@@ -5,25 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Paper Archive</title>
 <style>
-  :root { color-scheme: light dark; --bg:#fafaf8; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#1d4ed8; --card:#fff; --line:#e5e5e0; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --muted:#999; --accent:#60a5fa; --card:#1b1b1b; --line:#2a2a2a; } }
+  :root { color-scheme: light dark; --bg:#fafaf8; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#1d4ed8; --card:#fff; --line:#e5e5e0; --warn-bg:#fef3c7; --warn-fg:#78350f; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --muted:#999; --accent:#60a5fa; --card:#1b1b1b; --line:#2a2a2a; --warn-bg:#3a2e0a; --warn-fg:#fde68a; } }
   * { box-sizing: border-box; }
   body { margin:0; padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom); background:var(--bg); color:var(--fg); font: 16px/1.5 -apple-system, "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif; }
   main { max-width: 560px; margin: 0 auto; }
-  h1 { font-size: 20px; margin: 24px 0 8px; }
-  p.sub { color: var(--muted); margin: 0 0 24px; }
+  h1 { font-size: 20px; margin: 24px 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 20px; }
+  .who { display:flex; justify-content:space-between; align-items:center; gap:12px; margin: 0 0 16px; font-size: 14px; color: var(--muted); }
+  .who a { color: var(--accent); }
+  .signin { display:inline-block; padding: 10px 16px; border:1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--fg); text-decoration:none; font-weight: 600; }
   .scan { display:block; width:100%; padding: 28px 16px; font-size: 20px; font-weight: 600; color:#fff; background: var(--accent); border:0; border-radius: 16px; cursor:pointer; }
   .scan:disabled { opacity:.5; }
   input[type=file] { display:none; }
-  .token { margin: 16px 0; display:flex; gap:8px; }
-  .token input { flex:1; padding: 10px; border:1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 14px; }
+  details.token { margin: 12px 0; font-size: 13px; color: var(--muted); }
+  details.token input { width:100%; margin-top:6px; padding: 10px; border:1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 14px; }
   .status { margin: 16px 0; color: var(--muted); min-height: 1.5em; }
   .card { background: var(--card); border:1px solid var(--line); border-radius: 12px; padding: 16px; margin: 12px 0; }
   .card h2 { font-size: 17px; margin: 0 0 4px; }
   .meta { color: var(--muted); font-size: 14px; }
-  .action { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: #fef3c7; color:#78350f; font-size: 14px; }
-  @media (prefers-color-scheme: dark) { .action { background:#3a2e0a; color:#fde68a; } }
+  .action, .notice { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-fg); font-size: 14px; }
   .keep { margin-top: 6px; font-size: 14px; }
+  .drive { margin-top: 8px; font-size: 14px; }
+  .drive a { color: var(--accent); }
   pre { white-space: pre-wrap; font-size: 12px; color: var(--muted); max-height: 200px; overflow:auto; }
   details { margin-top: 10px; }
 </style>
@@ -33,12 +37,15 @@
   <h1>Paper Archive</h1>
   <p class="sub">Scan mail → know what it wants → know whether to keep the original.</p>
 
-  <div class="token">
-    <input id="token" type="password" placeholder="API token" autocomplete="off">
-  </div>
+  <div class="who" id="who"></div>
 
   <button class="scan" id="scanBtn">Scan</button>
   <input id="file" type="file" accept="image/*,application/pdf" capture="environment">
+
+  <details class="token" id="tokenBox">
+    <summary>Use an API token instead</summary>
+    <input id="token" type="password" placeholder="APP_BEARER_TOKEN" autocomplete="off">
+  </details>
 
   <div class="status" id="status"></div>
   <div id="results"></div>
@@ -47,18 +54,35 @@
 <script>
 /*
  * Photos are downscaled here, in the browser, before upload. The Worker cannot
- * resize images, Claude's per-image limit is ~5 MB, and a phone JPEG is 3–8 MB.
+ * resize images, Claude's per-image limit is ~5 MB, and a phone JPEG is 3-8 MB.
  * Drawing through a canvas also converts HEIC to JPEG on iOS, which neither
  * Document AI nor Claude accept directly.
  */
-const MAX_EDGE = 2200;      // long edge in px — plenty for OCR, well under limits
+const MAX_EDGE = 2200;      // long edge in px: plenty for OCR, well under limits
 const JPEG_QUALITY = 0.85;
 
 const $ = (id) => document.getElementById(id);
-const tokenEl = $("token"), status = $("status"), results = $("results");
+const tokenEl = $("token"), status = $("status"), results = $("results"), who = $("who");
+let signedIn = false;
 
 try { tokenEl.value = localStorage.getItem("pa_token") || ""; } catch {}
 tokenEl.addEventListener("change", () => { try { localStorage.setItem("pa_token", tokenEl.value); } catch {} });
+
+async function whoami() {
+  try {
+    const res = await fetch("/api/me");
+    if (res.ok) {
+      const { user } = await res.json();
+      signedIn = true;
+      who.innerHTML = `<span>Signed in as ${esc(user.name || user.email)} · filing to your Google Drive</span><a href="/auth/logout">Sign out</a>`;
+      $("tokenBox").hidden = true;
+      return;
+    }
+  } catch {}
+  signedIn = false;
+  who.innerHTML = `<a class="signin" href="/auth/login">Sign in with Google</a><span>Scans are filed to your own Drive</span>`;
+}
+whoami();
 
 $("scanBtn").addEventListener("click", () => $("file").click());
 
@@ -88,16 +112,14 @@ async function process(file) {
   try {
     status.textContent = "Preparing…";
     const { blob, type } = await downscale(file);
-    status.textContent = `Uploading ${(blob.size/1024).toFixed(0)} KB…`;
+    status.textContent = `Uploading ${(blob.size / 1024).toFixed(0)} KB…`;
 
-    const res = await fetch("/api/process", {
-      method: "POST",
-      headers: { "Content-Type": type, "Authorization": "Bearer " + tokenEl.value,
-                 "X-Filename": encodeURIComponent(file.name || "scan") },
-      body: blob,
-    });
+    const headers = { "Content-Type": type, "X-Filename": encodeURIComponent(file.name || "scan") };
+    if (!signedIn && tokenEl.value) headers["Authorization"] = "Bearer " + tokenEl.value;
+
+    const res = await fetch("/api/process", { method: "POST", headers, body: blob });
     const data = await res.json();
-    if (!res.ok) { status.textContent = "Failed: " + (data.error || res.status); return; }
+    if (!res.ok) { status.textContent = "Failed: " + (data.error || res.status) + (data.stage ? ` (${data.stage})` : ""); return; }
     status.textContent = "";
     render(data);
   } catch (err) {
@@ -114,23 +136,31 @@ const RETENTION = {
   unsure:             "⚠ Unsure — review",
 };
 
-function render({ extraction: x, ocr, id }) {
+function render({ extraction: x, ocr, id, filed, filing_error }) {
   const card = document.createElement("div");
   card.className = "card";
   const meta = [x.issuer, x.document_date, x.amount != null ? `${x.currency || ""} ${x.amount.toLocaleString()}` : null]
     .filter(Boolean).join(" · ");
+
+  let driveLine = "";
+  if (filed) driveLine = `<div class="drive">📁 <a href="${esc(filed.link)}" target="_blank" rel="noopener">${esc(filed.path)}</a></div>`;
+  else if (filing_error === "reconnect_google") driveLine = `<div class="notice">Google access has lapsed — <a href="/auth/login">sign in again</a> to file this to Drive.</div>`;
+  else if (filing_error) driveLine = `<div class="notice">Indexed, but filing to Drive failed. It will need a retry.</div>`;
+  else if (!signedIn) driveLine = `<div class="meta">Not filed — sign in with Google to file scans to your Drive.</div>`;
+
   card.innerHTML = `
     <h2>${esc(x.title)}</h2>
     <div class="meta">${esc(meta)}</div>
     <div class="meta">${esc(x.summary)}</div>
     ${x.action_required ? `<div class="action">⚠ Action required: ${esc(x.action_type || "")}${x.action_date ? " · due " + esc(x.action_date) : ""}</div>` : ""}
     <div class="keep">${RETENTION[x.retention] || esc(x.retention)} <span class="meta">— ${esc(x.retention_reason)}</span></div>
-    <details><summary class="meta">OCR (${ocr.pages} page${ocr.pages === 1 ? "" : "s"}, ${ocr.chars} chars)${id ? " · saved" : " · not saved"}</summary><pre>${esc(ocr.text)}</pre></details>
+    ${driveLine}
+    <details><summary class="meta">OCR (${ocr.pages} page${ocr.pages === 1 ? "" : "s"}, ${ocr.chars} chars)${id ? " · indexed" : " · not indexed"}</summary><pre>${esc(ocr.text)}</pre></details>
   `;
   results.prepend(card);
 }
 
-function esc(s) { return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c])); }
 </script>
 </body>
 </html>

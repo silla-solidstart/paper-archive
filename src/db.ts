@@ -36,6 +36,19 @@ export interface DocumentRow {
   updated_at: string;
 }
 
+export interface UserRow {
+  id: string;
+  google_sub: string;
+  email: string;
+  name: string | null;
+  drive_folder_id: string | null;
+  google_refresh_token_enc: string | null;
+  google_access_token: string | null;
+  google_token_expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 function sql(env: Env) {
   if (!env.DATABASE_URL) throw new Error("DATABASE_URL not configured");
   return neon(env.DATABASE_URL);
@@ -62,6 +75,52 @@ export async function ensureLocalUser(env: Env): Promise<string> {
   return (rows as Array<{ id: string }>)[0].id;
 }
 
+export async function getUserById(env: Env, id: string): Promise<UserRow | null> {
+  const rows = await sql(env).query(`SELECT * FROM users WHERE id = $1`, [id]);
+  return (rows as UserRow[])[0] ?? null;
+}
+
+export async function upsertGoogleUser(
+  env: Env,
+  u: { sub: string; email: string; name: string | null; refreshTokenEnc: string; accessToken: string; expiresAt: Date },
+): Promise<UserRow> {
+  const rows = await sql(env).query(
+    `INSERT INTO users (google_sub, email, name, google_refresh_token_enc, google_access_token, google_token_expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (google_sub) DO UPDATE SET
+       email = EXCLUDED.email,
+       name = COALESCE(EXCLUDED.name, users.name),
+       google_refresh_token_enc = EXCLUDED.google_refresh_token_enc,
+       google_access_token = EXCLUDED.google_access_token,
+       google_token_expires_at = EXCLUDED.google_token_expires_at
+     RETURNING *`,
+    [u.sub, u.email, u.name, u.refreshTokenEnc, u.accessToken, u.expiresAt.toISOString()],
+  );
+  return (rows as UserRow[])[0];
+}
+
+export async function updateUserTokens(env: Env, id: string, accessToken: string, expiresAt: Date): Promise<void> {
+  await sql(env).query(
+    `UPDATE users SET google_access_token = $2, google_token_expires_at = $3 WHERE id = $1`,
+    [id, accessToken, expiresAt.toISOString()],
+  );
+}
+
+export async function updateUserDriveFolder(env: Env, id: string, folderId: string): Promise<void> {
+  await sql(env).query(`UPDATE users SET drive_folder_id = $2 WHERE id = $1`, [id, folderId]);
+}
+
+export async function updateDocumentFiling(
+  env: Env,
+  id: string,
+  f: { driveFileId: string | null; filename: string | null; status: "complete" | "failed"; error: string | null },
+): Promise<void> {
+  await sql(env).query(
+    `UPDATE documents SET drive_file_id = $2, filename = COALESCE($3, filename), status = $4, error = $5 WHERE id = $1`,
+    [id, f.driveFileId, f.filename, f.status, f.error],
+  );
+}
+
 export async function insertDocument(
   env: Env,
   userId: string,
@@ -69,6 +128,7 @@ export async function insertDocument(
   ocr: OcrResult,
   x: Extraction,
   model: string,
+  status: "complete" | "filing" = "complete",
 ): Promise<string> {
   const q = sql(env);
 
@@ -96,7 +156,7 @@ export async function insertDocument(
        $6, $7, $8, $9, $10,
        $11, $12, $13,
        $14, $15,
-       $16, $17, 'complete'
+       $16, $17, $18
      ) RETURNING id`,
     [
       userId, filename,
@@ -104,7 +164,7 @@ export async function insertDocument(
       x.title, x.document_type, x.issuer, x.document_date, x.summary,
       x.action_required, x.action_type, x.action_date,
       x.retention, x.retention_reason,
-      JSON.stringify(extracted), model,
+      JSON.stringify(extracted), model, status,
     ],
   );
   return (rows as Array<{ id: string }>)[0].id;

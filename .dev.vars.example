@@ -21,11 +21,15 @@ GCP_SA_PRIVATE_KEY=
 # --- Google OAuth (console-only; no API exists) ---
 GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
-GOOGLE_OAUTH_REDIRECT_URI=https://pa.solidstart.jp/auth/callback
+# Production value lives in wrangler.toml [vars]; override for local dev:
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8787/auth/callback
 
 # --- App auth (interim, until Google sign-in) ---
 # Generate: openssl rand -base64 32
 APP_BEARER_TOKEN=
+# Signs session cookies and encrypts stored Google refresh tokens. Rotating it
+# signs everyone out and requires them to reconnect Google. openssl rand -base64 32
+SESSION_SECRET=
 
 # --- Anthropic (billed separately from any Claude subscription) ---
 ANTHROPIC_API_KEY=
