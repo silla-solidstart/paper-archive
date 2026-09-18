@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(pnpm:*)",
+      "Bash(node:*)",
+      "Bash(wrangler dev:*)",
+      "Bash(wrangler types:*)",
+      "Bash(wrangler d1:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git restore:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(sed:*)",
+      "Bash(wc:*)",
+      "Bash(psql:*)",
+      "Read(//Users/silla/dev/paper-archive/**)",
+      "Edit(//Users/silla/dev/paper-archive/**)",
+      "Write(//Users/silla/dev/paper-archive/**)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(wrangler deploy:*)",
+      "Bash(wrangler publish:*)",
+      "Bash(wrangler secret:*)",
+      "Bash(rm -rf:*)",
+      "Bash(gcloud:*)",
+      "Read(//Users/silla/dev/paper-archive/.dev.vars)",
+      "Read(//Users/silla/.ssh/**)"
+    ]
+  }
+}

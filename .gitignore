@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+*-service-account*.json
+*.pem
+*.key
+.wrangler/
+.next/
+dist/
+build/
+.DS_Store
+*.log
