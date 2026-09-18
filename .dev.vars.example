@@ -1,0 +1,20 @@
+# Copy to .dev.vars and fill in. .dev.vars is gitignored — never commit real values.
+
+# Google Cloud — Document AI
+GCP_PROJECT_ID=
+GCP_DOCAI_LOCATION=us
+GCP_DOCAI_PROCESSOR_ID=
+# Service account, for the Worker to call Document AI (JWT signed via Web Crypto)
+GCP_SA_CLIENT_EMAIL=
+GCP_SA_PRIVATE_KEY=
+
+# Google OAuth — Sign in with Google + drive.file
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+GOOGLE_OAUTH_REDIRECT_URI=
+
+# Anthropic — billed separately from any Claude subscription
+ANTHROPIC_API_KEY=
+
+# Neon Postgres
+DATABASE_URL=
