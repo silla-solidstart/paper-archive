@@ -64,6 +64,9 @@ CREATE TABLE documents (
   retention_reason text,
 
   extracted_data   jsonb NOT NULL DEFAULT '{}'::jsonb,
+  -- Which model produced the interpretation. Needed the moment models are
+  -- A/B-ed, and for re-extracting old rows when a better one lands.
+  extraction_model text,
 
   -- Pipeline state: stages fail and are retried independently
   status           processing_status NOT NULL DEFAULT 'pending',

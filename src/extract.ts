@@ -9,11 +9,44 @@ import type { Env } from "./types";
  * gives canonical characters, the image gives layout the text stream loses.
  */
 
+// Closed sets. Free text here means tax_notice / tax-notice / 税金 all appear
+// over time and the Inbox cannot group them. Extend the list; never free it.
+export const DOCUMENT_TYPES = [
+  "tax_notice",
+  "government_notice",
+  "utility_bill",
+  "insurance",
+  "bank_statement",
+  "invoice",
+  "receipt",
+  "school_letter",
+  "medical",
+  "contract",
+  "subscription",
+  "advertisement",
+  "other",
+] as const;
+
+export const CATEGORIES = [
+  "tax",
+  "property",
+  "utilities",
+  "insurance",
+  "finance",
+  "education",
+  "health",
+  "legal",
+  "employment",
+  "housing",
+  "vehicle",
+  "government",
+  "shopping",
+  "other",
+] as const;
+
 export const ExtractionSchema = z.object({
   title: z.string().describe("Document title as printed, in its original language"),
-  document_type: z
-    .string()
-    .describe("Snake_case type, e.g. tax_notice, utility_bill, school_letter, contract"),
+  document_type: z.enum(DOCUMENT_TYPES).describe("Closest type; use other if none fits"),
   issuer: z.string().nullable().describe("Issuing organisation as printed"),
   document_date: z
     .string()
@@ -36,7 +69,7 @@ export const ExtractionSchema = z.object({
   ]),
   retention_reason: z.string().describe("Why, in one sentence"),
 
-  categories: z.array(z.string()),
+  categories: z.array(z.enum(CATEGORIES)),
 
   // Common structured fields, promoted because they are queried across types.
   amount: z.number().nullable(),
@@ -71,8 +104,13 @@ Retention — be conservative. This decides whether someone throws away an origi
 - keep_temporarily: needed until an action completes or a period lapses
   (an unpaid bill, a warranty still running).
 - digital_sufficient: informational only, reissuable, no legal weight
-  (advertising, already-paid receipts for small amounts, notifications).
+  (advertising, notifications, statements that are also available online).
 - unsure: anything you cannot confidently place above.
+
+Receipts (領収書) and invoices (請求書) are never digital_sufficient. The user
+may be a business or sole proprietor, and under 電子帳簿保存法 a casual scan is
+not a compliant substitute for the original. Answer keep_temporarily if the
+document is clearly personal and small; otherwise unsure.
 
 Never answer digital_sufficient to be helpful. "unsure" is the correct answer
 when you are unsure, and the product surfaces it for human review.`;

@@ -8,6 +8,7 @@ export interface Env {
   GOOGLE_OAUTH_REDIRECT_URI: string;
 
   // Secrets
+  APP_BEARER_TOKEN: string;
   GCP_SA_CLIENT_EMAIL: string;
   GCP_SA_PRIVATE_KEY: string;
   ANTHROPIC_API_KEY: string;

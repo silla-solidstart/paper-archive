@@ -1,16 +1,31 @@
 import type { Env } from "./types";
 import { ocr } from "./docai";
 import { extract } from "./extract";
+import { requireBearer } from "./auth";
 
 /**
  * Paper Archive — Cloudflare Worker.
  *
- * Implemented: OCR → extraction. That path is testable with only the service
- * account key and an Anthropic key.
+ * Implemented: OCR → extraction, behind a bearer token. Testable with the
+ * service account key, an Anthropic key, and APP_BEARER_TOKEN.
  *
- * Not yet implemented: Google sign-in, Drive filing, Postgres indexing, MCP.
- * Those need the OAuth client, which is console-only. See docs/setup.md.
+ * Not yet: Google sign-in, Drive filing, Postgres indexing, MCP. Those need
+ * the OAuth client, which is console-only. See docs/setup.md.
  */
+
+// Document AI online processing accepts up to ~20 MB. Anything larger fails
+// there anyway; refuse it before buffering it.
+const MAX_BODY_BYTES = 20 * 1024 * 1024;
+
+// What both Document AI and Claude accept. HEIC — the iPhone Photos default —
+// is deliberately absent: neither upstream takes it. The client must convert.
+const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+
+// Claude's per-image limit is ~5 MB. The client is expected to downscale
+// photos before upload; this is the backstop that turns a confusing upstream
+// error into a clear one — after OCR has already been paid for, so it is a
+// backstop, not the plan.
+const MAX_IMAGE_FOR_EXTRACTION = 5 * 1024 * 1024;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body, null, 2), {
@@ -22,9 +37,19 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    // Unauthenticated: liveness only. Nothing about configuration leaks here.
     if (url.pathname === "/health") {
+      return json({ ok: true });
+    }
+
+    if (url.pathname.startsWith("/api/")) {
+      const denied = await requireBearer(request, env);
+      if (denied) return denied;
+    }
+
+    // Authenticated: which credentials are present, for setup debugging.
+    if (url.pathname === "/api/status") {
       return json({
-        ok: true,
         processor: `${env.GCP_DOCAI_LOCATION}/${env.GCP_DOCAI_PROCESSOR_ID}`,
         version: env.GCP_DOCAI_PROCESSOR_VERSION,
         configured: {
@@ -37,22 +62,43 @@ export default {
     }
 
     // POST a document (image or PDF) as the raw body. Returns OCR + extraction.
-    // Deliberately stateless for now: nothing is filed or stored yet.
+    // Stateless for now: nothing is filed or stored.
     if (url.pathname === "/api/process" && request.method === "POST") {
-      const mimeType = request.headers.get("Content-Type") ?? "application/octet-stream";
-      const bytes = await request.arrayBuffer();
+      const mimeType = (request.headers.get("Content-Type") ?? "").split(";")[0].trim();
+      if (!ACCEPTED_TYPES.has(mimeType)) {
+        return json(
+          { error: `unsupported type "${mimeType}"`, accepted: [...ACCEPTED_TYPES] },
+          415,
+        );
+      }
 
+      const declared = Number(request.headers.get("Content-Length") ?? 0);
+      if (declared > MAX_BODY_BYTES) {
+        return json({ error: "body too large", max_bytes: MAX_BODY_BYTES }, 413);
+      }
+
+      const bytes = await request.arrayBuffer();
       if (bytes.byteLength === 0) return json({ error: "empty body" }, 400);
+      if (bytes.byteLength > MAX_BODY_BYTES) {
+        return json({ error: "body too large", max_bytes: MAX_BODY_BYTES }, 413);
+      }
+
+      const isImage = mimeType.startsWith("image/");
+      if (isImage && bytes.byteLength > MAX_IMAGE_FOR_EXTRACTION) {
+        return json(
+          {
+            error: "image too large for extraction; downscale before upload",
+            max_bytes: MAX_IMAGE_FOR_EXTRACTION,
+          },
+          413,
+        );
+      }
 
       try {
         const result = await ocr(env, bytes, mimeType);
 
-        // Pass the original image alongside the OCR text. PDFs are not sent as
-        // images — Document AI has already flattened them to text.
-        const isImage = mimeType.startsWith("image/");
-        const image = isImage
-          ? { data: arrayBufferToBase64(bytes), mediaType: mimeType }
-          : null;
+        // PDFs are not sent as images — Document AI has already flattened them.
+        const image = isImage ? { data: arrayBufferToBase64(bytes), mediaType: mimeType } : null;
 
         const extraction = await extract(env, result.text, image);
 
@@ -67,7 +113,11 @@ export default {
           extraction,
         });
       } catch (err) {
-        return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+        // Upstream error bodies can carry project identifiers and quota
+        // details. Log them; do not echo them.
+        console.error("process failed:", err);
+        const stage = err instanceof Error && /Document AI/.test(err.message) ? "ocr" : "extraction";
+        return json({ error: "processing failed", stage }, 502);
       }
     }
 

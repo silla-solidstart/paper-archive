@@ -1,13 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm:*)",
-      "Bash(npx:*)",
-      "Bash(pnpm:*)",
-      "Bash(node:*)",
-      "Bash(wrangler dev:*)",
-      "Bash(wrangler types:*)",
-      "Bash(wrangler d1:*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git add:*)",
@@ -29,16 +22,31 @@
       "Bash(psql:*)",
       "Read(//Users/silla/dev/paper-archive/**)",
       "Edit(//Users/silla/dev/paper-archive/**)",
-      "Write(//Users/silla/dev/paper-archive/**)"
+      "Write(//Users/silla/dev/paper-archive/**)",
+      "Bash(npm install:*)",
+      "Bash(npm run typecheck)",
+      "Bash(npm view:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx wrangler dev:*)",
+      "Bash(npx wrangler types:*)",
+      "Bash(node scripts/:*)",
+      "Bash(node -p:*)"
     ],
     "deny": [
       "Bash(git push:*)",
       "Bash(wrangler deploy:*)",
       "Bash(wrangler publish:*)",
       "Bash(wrangler secret:*)",
-      "Bash(rm -rf:*)",
       "Read(//Users/silla/dev/paper-archive/.dev.vars)",
-      "Read(//Users/silla/.ssh/**)"
+      "Read(//Users/silla/.ssh/**)",
+      "Bash(rm -r:*)",
+      "Bash(rm -rf:*)",
+      "Bash(rm -fr:*)",
+      "Bash(npm run deploy:*)",
+      "Bash(npx wrangler deploy:*)",
+      "Bash(npx wrangler publish:*)",
+      "Bash(npx wrangler secret:*)",
+      "Bash(node -e:*)"
     ]
   }
 }

@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "typecheck": "tsc --noEmit",
-    "deploy": "wrangler deploy"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",
