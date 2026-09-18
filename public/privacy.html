@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="/styles.css">
+<title>Privacy — Paper Archive</title>
+<style>
+  main { max-width: 640px; }
+  h1 { font-size: 22px; margin: 8px 0 4px; }
+  h2 { text-transform: none; letter-spacing: 0; font-size: 17px; color: var(--fg); margin: 22px 0 6px; }
+  p, li { font-size: 15px; }
+  .draft { padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-fg); font-size: 14px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+</style>
+</head>
+<body>
+<header class="top"><div class="brand"><a href="/" style="color:inherit;text-decoration:none">Paper Archive</a></div></header>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="meta">Effective 2026-09-18 · Operated by SolidStart (solidstart.jp) · Contact: privacy@solidstart.jp</p>
+  <p class="draft">Draft. Review before the consent screen is published; adjust the contact address and legal entity name.</p>
+
+  <h2>What Paper Archive does</h2>
+  <p>You photograph a paper document. We read the text from it, work out what the document is and what it asks of you, store a copy in <em>your</em> Google Drive, and keep a searchable index so you can find it later.</p>
+
+  <h2>What we store, and where</h2>
+  <ul>
+    <li><strong>The document itself</strong> is stored in your own Google Drive, in a folder named "Paper Archive" that this app creates. We do not keep a copy of the image or PDF on our servers.</li>
+    <li><strong>The text and metadata</strong> extracted from each document — the recognised text, title, issuer, dates, amounts, what action it requires, and whether the original is likely worth keeping — are stored in our database so that search and reminders work.</li>
+    <li><strong>Your account</strong>: the Google account identifier, email address and name you sign in with, and the tokens needed to write to your Drive folder. Refresh tokens are stored encrypted.</li>
+  </ul>
+
+  <h2>Google Drive access</h2>
+  <p>We request the narrowest Drive permission Google offers (<code>drive.file</code>). It lets this app see and manage only the files it created. It does not give us access to anything else in your Drive.</p>
+
+  <h2>Processing partners</h2>
+  <p>To read and understand documents we send them to Google Cloud Document AI (text recognition) and Anthropic's Claude (interpretation). These providers process the data to provide the service and do not use it to train their models under the terms we use. Data is processed in Singapore (Document AI) and the United States (Anthropic).</p>
+
+  <h2>What we do not do</h2>
+  <ul>
+    <li>We do not sell or share your data with advertisers or data brokers.</li>
+    <li>We do not read your Drive beyond the files this app created.</li>
+    <li>We do not use your documents to train models.</li>
+  </ul>
+
+  <h2>Deleting your data</h2>
+  <p>Deleting a document in the app removes it from our index and moves the Drive copy to your Drive trash. To delete your account and all indexed data, email the contact address above; we remove it within 30 days. You can revoke the app's Drive access at any time at <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.</p>
+
+  <h2>Retention advice is advice</h2>
+  <p>The app suggests whether a paper original can be discarded. It is a suggestion, deliberately conservative, and not legal or tax advice. When unsure, the app says so, and you decide.</p>
+
+  <h2>Changes</h2>
+  <p>We will update this page and the effective date when the policy changes.</p>
+
+  <hr>
+
+  <h1 lang="ja">プライバシーポリシー（要約）</h1>
+  <p lang="ja" class="draft">下書きです。公開前に内容と事業者名・連絡先を確認してください。</p>
+  <ul lang="ja">
+    <li><strong>保存場所</strong>：書類の画像・PDFはお客様ご自身の Google ドライブ内の「Paper Archive」フォルダに保存されます。当社のサーバーには画像を保存しません。</li>
+    <li><strong>当社が保存する情報</strong>：書類から読み取ったテキストと、タイトル・発行元・日付・金額・必要な対応・原本保管の要否などのメタデータ、および Google アカウントの識別子・メールアドレス・氏名、ドライブへの書き込みに必要なトークン（暗号化して保存）。</li>
+    <li><strong>利用目的</strong>：書類の検索、期限の通知、原本保管の判断支援。</li>
+    <li><strong>Google ドライブへのアクセス</strong>：本アプリが作成したファイルのみを扱える最小権限（drive.file）を使用します。</li>
+    <li><strong>処理委託先</strong>：Google Cloud Document AI（文字認識、シンガポール）および Anthropic Claude（内容の解釈、米国）。モデルの学習には使用されません。</li>
+    <li><strong>第三者提供</strong>：広告事業者やデータブローカーへの販売・提供は行いません。</li>
+    <li><strong>削除</strong>：アプリ内で書類を削除すると索引から削除され、ドライブのファイルはゴミ箱に移動します。アカウントと全データの削除は上記連絡先までご連絡ください（30日以内に対応）。</li>
+    <li><strong>原本保管の助言について</strong>：あくまで参考情報であり、法律上・税務上の助言ではありません。</li>
+  </ul>
+</main>
+</body>
+</html>

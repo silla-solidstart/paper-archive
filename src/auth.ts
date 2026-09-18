@@ -21,8 +21,7 @@ export async function requireBearer(request: Request, env: Env): Promise<Respons
 
   const a = new TextEncoder().encode(presented);
   const b = new TextEncoder().encode(env.APP_BEARER_TOKEN);
-  // timingSafeEqual requires equal lengths; unequal length is simply a mismatch.
-  const ok = a.byteLength === b.byteLength && crypto.subtle.timingSafeEqual(a, b);
+  const ok = constantTimeEqual(a, b);
 
   if (!ok) {
     return new Response(JSON.stringify({ error: "unauthorized" }), {
@@ -31,4 +30,16 @@ export async function requireBearer(request: Request, env: Env): Promise<Respons
     });
   }
   return null;
+}
+
+/**
+ * Portable constant-time comparison. crypto.subtle.timingSafeEqual exists on
+ * Cloudflare Workers but is not standard Web Crypto, and the tests run on Node.
+ * Length is compared without early exit; the loop always runs over the longer.
+ */
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  const n = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < n; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+  return diff === 0;
 }

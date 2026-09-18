@@ -178,9 +178,23 @@ P=solidstart-paper-archive; mk() { printf '%s' "$2" | gcloud secrets create "$1"
 mk DATABASE_URL        'postgres://…'                 # Neon → pooled connection string
 mk ANTHROPIC_API_KEY   'sk-ant-…'                     # console.anthropic.com
 ```
-Then the two console-only OAuth steps (consent screen External + **published**; web client
-with redirect URIs `https://pa.solidstart.jp/auth/callback` and
-`http://localhost:8787/auth/callback`), and:
+Then the two console-only OAuth steps. Consent screen (APIs & Services → OAuth consent
+screen / Google Auth platform), exact values:
+
+| Field | Value |
+|---|---|
+| App name | Paper Archive |
+| User support email | your solidstart.jp address |
+| App logo | optional; `public/icons/icon-512.png` |
+| App home page | `https://pa.solidstart.jp/` |
+| Privacy policy | `https://pa.solidstart.jp/privacy` ← page exists in the repo; review the draft |
+| Authorized domain | `solidstart.jp` (already Google-verified via Workspace) |
+| Developer contact | your solidstart.jp address |
+| User type | **External**, then **Publish** (not Testing — 7-day refresh tokens) |
+| Scopes | `openid`, `email`, `profile`, `https://www.googleapis.com/auth/drive.file` |
+
+Then the web client (Credentials → OAuth client ID → Web application) with redirect URIs
+`https://pa.solidstart.jp/auth/callback` and `http://localhost:8787/auth/callback`, and:
 ```bash
 mk GOOGLE_OAUTH_CLIENT_ID     '…apps.googleusercontent.com'
 mk GOOGLE_OAUTH_CLIENT_SECRET '…'
@@ -195,6 +209,9 @@ mk GOOGLE_OAUTH_CLIENT_SECRET '…'
   agent caps itself at ~20 test runs per session (≈¥100) unless told otherwise.
 - Sign-in and Drive filing need a browser: that first run is yours, in **Chrome**
   (Safari drops the `Secure` session cookie on `http://localhost`).
+- Prompt tuning on the real corpus: put scans in a folder and run
+  `node scripts/eval-extract.ts <folder>` against the dev server. One line per document,
+  full responses saved for diffing between prompt versions.
 
 ### 4. Deploy
 

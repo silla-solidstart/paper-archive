@@ -42,6 +42,9 @@ Other routes, session cookie or bearer: `GET /api/me`, `GET /api/documents/:id`,
 The PWA (`public/`, no build step) has Scan / Recent / Actions / Search tabs and a document
 view; it is installable (manifest + service worker; the shell is cached, the API never is).
 
+Prompt tuning: `node scripts/eval-extract.ts <folder-of-scans>` runs the corpus through a
+running dev server and tabulates the extraction per document (billable per document).
+
 MCP endpoint for Claude and other assistants: `POST /mcp` (Streamable HTTP, stateless),
 bearer token only. Tools: `search_documents`, `get_document`, `list_actions`,
 `set_retention_decision`.

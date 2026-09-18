@@ -15,9 +15,11 @@ const SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 // Tokens last an hour; a Worker isolate may serve many requests in that time.
 let cached: { token: string; expiresAt: number } | null = null;
 
-export function base64url(input: ArrayBuffer | string): string {
+export function base64url(input: ArrayBuffer | Uint8Array | string): string {
   const bytes =
-    typeof input === "string" ? new TextEncoder().encode(input) : new Uint8Array(input);
+    typeof input === "string" ? new TextEncoder().encode(input)
+    : input instanceof Uint8Array ? input
+    : new Uint8Array(input);
   let binary = "";
   // Chunked: String.fromCharCode(...bytes) blows the stack on large inputs.
   const CHUNK = 0x8000;
