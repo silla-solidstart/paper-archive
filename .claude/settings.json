@@ -29,7 +29,8 @@
       "Bash(npx tsc:*)",
       "Bash(npx wrangler dev:*)",
       "Bash(npx wrangler types:*)",
-      "Bash(node scripts/:*)"
+      "Bash(node scripts/:*)",
+      "Bash(scripts/dev.sh:*)"
     ],
     "deny": [
       "Bash(git push:*)",
@@ -45,7 +46,8 @@
       "Bash(npx wrangler deploy:*)",
       "Bash(npx wrangler publish:*)",
       "Bash(npx wrangler secret:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(scripts/sync-secrets.sh:*)"
     ]
   }
 }
