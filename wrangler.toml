@@ -1,0 +1,20 @@
+name = "paper-archive"
+main = "src/index.ts"
+compatibility_date = "2026-09-18"
+compatibility_flags = ["nodejs_compat"]
+
+# Single environment — everything is production. See CLAUDE.md § Environments.
+[[routes]]
+pattern = "pa.solidstart.jp"
+custom_domain = true
+
+# Non-secret config. Secrets go in .dev.vars locally and `wrangler secret put`
+# in production: GCP_SA_CLIENT_EMAIL, GCP_SA_PRIVATE_KEY, ANTHROPIC_API_KEY,
+# DATABASE_URL, GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET.
+[vars]
+GCP_PROJECT_ID = "solidstart-paper-archive"
+GCP_PROJECT_NUMBER = "318291773922"
+GCP_DOCAI_LOCATION = "asia-southeast1"
+GCP_DOCAI_PROCESSOR_ID = "e362ac4f7e80f6e"
+GCP_DOCAI_PROCESSOR_VERSION = "pretrained-ocr-v2.1.1-2025-01-31"
+GOOGLE_OAUTH_REDIRECT_URI = "https://pa.solidstart.jp/auth/callback"
