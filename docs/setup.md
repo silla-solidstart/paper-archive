@@ -40,10 +40,11 @@ users are not on the solidstart.jp domain.
 ### Sign-in + Drive (same project)
 
 - [x] Enable `drive.googleapis.com`
-- [ ] Consent screen: user type **External**, status **Testing**. Not Internal —
-      Internal restricts sign-in to solidstart.jp accounts, so no real user could ever
-      use the app. Testing allows 100 test users with no verification review.
-- [ ] Add yourself as a test user
+- [ ] Consent screen: user type **External**, then **publish to Production**. Not Internal —
+      Internal restricts sign-in to solidstart.jp accounts, so no real user could ever use
+      the app. And not left in Testing: Testing-mode refresh tokens expire after 7 days,
+      which breaks a scan-and-forget product. Scopes here are all non-sensitive, so this
+      should be a publish rather than a verification review.
 - [ ] Scopes: `openid`, `email`, `profile`, `https://www.googleapis.com/auth/drive.file`
       — and nothing more. `drive.file` is non-sensitive, which is what keeps the
       verification process off the critical path.
@@ -96,29 +97,38 @@ later, which is what makes the setup evening feel like it ate a Saturday.
 - [ ] **Neon**: `psql "$DATABASE_URL" -c 'select 1'`
 - [ ] **Cloudflare**: hello-world Worker live on `*.workers.dev`
 
----
+---## Provisioned state (2026-09-18)
 
-## Provisioned state (2026-09-18)
+Single environment. There is no dev/prod split — everything here is production.
 
 | Resource | Value |
 |---|---|
 | Org | `solidstart.jp` (7833859326) |
-| Project | `solidstart-paper-archive-dev` (817649792332), under the org |
-| Billing | `01B638-95C831-492E58`, JPY, org-parented, **linked** |
-| Budget | `paper-archive-dev`, ¥3,000, alerts at 50/90/100% |
+| Project | `solidstart-paper-archive` (318291773922), under the org |
+| Billing | `01B638-95C831-492E58`, JPY, org-parented, linked |
+| Budget | `paper-archive`, ¥3,000, alerts at 50/90/100% |
 | APIs | documentai, drive, iam, billingbudgets |
-| Processor | `642b4fe235c0b1e3` @ `asia-southeast1` |
+| Processor | `e362ac4f7e80f6e` @ `asia-southeast1` |
 | Version | `pretrained-ocr-v2.1.1-2025-01-31` (Enterprise OCR) |
-| Service account | `paper-archive-worker@…`, `roles/documentai.apiUser` |
+| Service account | `paper-archive-worker@solidstart-paper-archive.iam.gserviceaccount.com`, `roles/documentai.apiUser` |
 
-**Region note:** Document AI has no `asia-northeast1` (Tokyo). Available regions for
-this project are us, eu, asia-south1, asia-southeast1, australia-southeast1,
-europe-west2, europe-west3, northamerica-northeast1, us-east7. `asia-southeast1`
-(Singapore) is the closest to Japan and keeps users' documents in-region, which
-matters for personal tax paperwork. Switching regions later is one API call; stored
-OCR text is unaffected.
+**Region:** Document AI has no `asia-northeast1` (Tokyo). Available: us, eu, asia-south1,
+asia-southeast1, australia-southeast1, europe-west2, europe-west3,
+northamerica-northeast1, us-east7. `asia-southeast1` (Singapore) is closest to Japan and
+keeps users' documents in-region. Changing region later is one API call; stored OCR is
+unaffected.
 
-**Version note:** the processor was created with `pretrained-ocr-v1.0-2020-09-23` as
-default (Google's "Stable"). That is the old base OCR, not Enterprise Document OCR.
-It was switched to v2.1.1. Worth A/B-ing both on the real corpus — v1.0 is labelled
-Stable and v2.1.1 Release Candidate, but v2.1.1 is the Enterprise line the brief calls for.
+**Processor version — do not leave this at the default.** New OCR processors are seeded
+with `pretrained-ocr-v1.0-2020-09-23` ("Google Stable"), which is the 2020 base model, not
+Enterprise Document OCR. Measured on the brief PDF:
+
+| Version | chars | Japanese runs | 令和 read correctly |
+|---|---|---|---|
+| v1.0 (default) | 12,462 | 17 | **no — misread as 今和** |
+| v2.1.1 (Enterprise) | 12,492 | 24 | yes |
+
+A misread era character means a wrong year on a payment deadline. Pin the version
+explicitly in config rather than trusting the processor default.
+
+**Predecessor:** `solidstart-paper-archive-dev` (817649792332) was the first attempt and is
+`DELETE_REQUESTED` as of 2026-09-18; recoverable via `gcloud projects undelete` for 30 days.

@@ -65,3 +65,15 @@ rate-limit in production.
 - Do not run anything billable (Document AI, Claude API, deploys) unattended without an
   explicit spend ceiling from the user.
 - Deploys and `git push` are the user's call, not an automatic step.
+
+## Environments
+
+**One environment. Everything is production.** No dev/prod split, no staging — decided
+deliberately for a solo project. Consequences that follow from it:
+
+- The Google consent screen is **published**, not left in Testing. Testing-mode refresh
+  tokens expire after 7 days, which is fatal for scan-and-forget.
+- Migrations run against real data. Branch Neon ad hoc before a risky one, then delete
+  the branch — branching is an on-demand tool here, not standing infrastructure.
+- The test corpus is the user's own paperwork, so "dev data" is real personal data from
+  day one. Treat it accordingly.
