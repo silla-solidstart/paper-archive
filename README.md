@@ -9,7 +9,7 @@ full brief.
 ## Setup
 
 Requires accounts: Google Cloud (Document AI + OAuth), Anthropic API, Neon, Cloudflare.
-See `docs/setup.md`.
+See [docs/setup.md](docs/setup.md).
 
 ```bash
 npm install
