@@ -33,16 +33,16 @@ These were decided deliberately. Do not revisit them without the user saying so.
 |---|---|
 | Frontend | Static HTML PWA in `public/`, served by Workers assets. The brief proposed Next.js; one page has not needed it. |
 | Backend | Cloudflare Workers |
-| Temp storage | None yet. R2 deferred with Workflows; see "Known gap" below. |
+| Temp storage | None. The owner's Drive holds the original from the first second (see "Drive first"). |
 | Permanent storage | User's Google Drive |
 | Database | Neon Postgres |
 | OCR | Google Document AI — Enterprise Document OCR |
 | Understanding | Claude (`claude-opus-5`), structured outputs, image + OCR text in |
 | Search | Postgres (see Japanese caveat below) → pgvector later |
 
-Pipeline: `Upload → OCR → AI extraction → Validate → Generate PDF → Drive → Index → Done`.
+Pipeline: `Upload → Drive (original) → OCR → AI extraction → Index → rename in Drive → Done`.
 Each stage must be independently retryable; Document AI, Claude, and Drive all fail and
-rate-limit in production.
+rate-limit in production. Anything after the Drive step can be re-run later ("Re-analyze").
 
 ## Known traps
 
@@ -58,12 +58,30 @@ rate-limit in production.
   and 納税通知書 → "pay by X" patterns are where competitors fail. Test against real
   documents, not synthetic ones.
 
-## Known gap: no retry without R2
+## Drive first (hard rule, decided 2026-09-20)
 
-R2 was deferred, so the Worker keeps no bytes. If OCR and extraction succeed
-but the Drive upload fails, the document is indexed with `status = failed` and
-the only recovery is a re-scan. The UI says so. When Workflows arrive, add R2
-as the staging store and this becomes a real retry.
+**The photo is saved to the archive owner's Google Drive before anything else
+happens, byte-for-byte as sent, regardless of what OCR or the model do
+afterwards.** Consequences:
+
+- Order is Drive → OCR → understand → index → rename. A failure after the
+  Drive step leaves a document with `drive_file_id` set and `status = failed`;
+  the fix is *Re-analyze*, never a re-scan. There is no "not in Drive" state
+  for an indexed document.
+- If the owner's Google grant has lapsed, the scan stops *before* OCR with
+  `409 reconnect_google` (or `owner_no_drive`): nothing spent, photo still on
+  the phone. Members of a shared archive are blocked until the owner signs in
+  again — that is the honest consequence of "regardless".
+- The "original" is the photo as the phone sends it: long edge 2200 px JPEG
+  (~0.5 MB, ≈190 dpi on A4). Silla: "the document just needs to be legible";
+  nothing higher buys accuracy (Claude downsizes past ~1.5k px anyway).
+  No PDF wrapping, no re-encoding on the server.
+- Files land as `<timestamp>.jpg` under the scan month and are renamed
+  `date_issuer_title.jpg` (and moved to the document's own month) once
+  extraction succeeds. A document that never got read keeps the timestamp name.
+- The only dry path is `POST /api/process?dry=1` for the operator (prompt
+  tuning, `scripts/eval-extract.ts`): nothing is stored anywhere, so there is
+  nothing to protect.
 
 ## Access (decided 2026-09-20): invite-only
 
@@ -133,11 +151,51 @@ palette navy `#1e2a44` + vermilion `#e34234`. Regenerate with `FINAL=1 node bran
 
 ## Filing format
 
-JPEG scans are filed as single-page PDFs with the JPEG embedded verbatim
-(`src/pdf.ts`, no library, page sized to A4). The wrapper is tested two ways:
-every xref offset is checked byte-exactly, and macOS CoreGraphics (`sips`)
-opens the result as an independent reader. PNG/WebP are uploaded as-is
-because wrapping them would need a decoder; the PWA only ever sends JPEG or PDF.
+The bytes the phone sent, unchanged, with their own extension (`.jpg`, `.png`,
+`.webp`, `.pdf`). The earlier JPEG→PDF wrapper (`src/pdf.ts`) was removed on
+2026-09-20 with the Drive-first rule: what Drive holds must be the original.
+
+## Labels (decided 2026-09-20)
+
+Four axes on every document, all fixed machine codes localised only in the UI,
+never translated copies (`src/extract.ts` owns the lists):
+
+| Axis | Column | Values |
+|---|---|---|
+| Kind | `document_type` | receipt, invoice, tax_notice, utility_bill, … |
+| Topic | `extracted_data.categories` | tax, utilities, education, … |
+| Handling | `handling[]` | `todo` (→ To do), `expense` (→ ledger), `record`, `notice`, `noise` |
+| Retention | `retention` | digital_sufficient / keep_temporarily / keep_original / unsure |
+
+Plus `issuer_key` (short stable sender name so 東京電力エナジーパートナー and
+東京電力 group; the user can set it, which sticks) and `keywords[]` (≤10
+bilingual search terms — the cheap answer to cross-language search until
+pgvector). `source_lang` records what the paper is printed in; `title`,
+`issuer`, OCR text and line-item names stay as printed. Queries are never
+translated at run time.
+
+## Expenses (decided 2026-09-20)
+
+`handling` containing `expense` writes one `expenses` row (merchant, date,
+total, tax, currency, payment method, `expense_kind`) and best-effort
+`expense_items` (name as printed, qty, unit price, amount, `category` — snacks,
+groceries, alcohol, household, …). "How much on snacks in August" is
+`GET /api/expense-items?month=2026-08&category=snacks` or the MCP tool
+`list_expense_items`; the month view is `GET /api/spending` and `#/spending`.
+Tables found in any document are kept as printed in `extracted_data.tables`.
+Itemising a long receipt costs roughly ¥2–3 extra on Opus 5.
+
+## Re-analysis (decided 2026-09-20)
+
+`EXTRACTION_VERSION` (`src/extract.ts`) is bumped whenever the schema or
+prompt changes in a way worth re-running old documents for. Every run —
+ingest or re-analysis — is appended to `document_extractions` (full JSON,
+model, cost) and the document row shows the latest; nothing is ever lost.
+`user_overrides` marks fields the human set (`retention`, `issuer`); a re-run
+fills around them. Triggers: the *Re-analyze* button on a document
+(`POST /api/documents/:id/reanalyze`, original fetched from Drive, text-only
+fallback when it cannot be) and `npm run reextract` for everything below the
+current version (one document per request; ledgered as `kind = reanalyze`).
 
 ## What has been verified vs. only typechecked
 
@@ -147,8 +205,10 @@ every route's auth/size/type handling and the PWA assets (wrangler dev smoke
 tests), and the pure logic (`npm test`). Verified 2026-09-20 end to end through the Worker with real credentials:
 migration runner (pg_trgm present on the Neon plan), service-account →
 Document AI, Claude structured extraction, Neon insert, recent/search
-(Japanese trigram hit confirmed). **Never executed:** the OAuth exchange and
-the Drive upload — both need the OAuth client. Treat those as first-run risks.
+(Japanese trigram hit confirmed). OAuth exchange verified 2026-09-20 (Silla
+signed in on the live site). **Never executed as of 2026-09-20:** the Drive
+upload/rename/download path and extraction v2 against real paper — the first
+scan after the Drive-first deploy is the test. Treat them as first-run risks.
 
 ## Secrets
 

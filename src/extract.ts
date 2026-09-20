@@ -52,6 +52,56 @@ export const RETENTION_STATUSES = [
 ] as const;
 export type RetentionStatus = (typeof RETENTION_STATUSES)[number];
 
+// Handling: what the product DOES with a document. A set, because a utility
+// bill is an expense and, until paid, a to-do. Everything routes off this.
+export const HANDLING = ["todo", "expense", "record", "notice", "noise"] as const;
+export type Handling = (typeof HANDLING)[number];
+
+// Expense taxonomy. Fixed codes: "how much on snacks in August" is a SQL
+// question over these, never a text search, so language never enters it.
+export const EXPENSE_KINDS = [
+  "groceries", "dining", "transport", "utilities", "housing", "medical", "education", "clothing",
+  "household", "electronics", "entertainment", "subscription", "insurance", "tax", "business", "other",
+] as const;
+export const ITEM_CATEGORIES = [
+  "groceries", "snacks", "alcohol", "beverages", "household", "dining", "transport", "utilities", "medical",
+  "education", "clothing", "electronics", "entertainment", "subscription", "fees", "tax", "business", "other",
+] as const;
+export const PAYMENT_METHODS = ["cash", "card", "transfer", "direct_debit", "e_money", "other"] as const;
+
+/**
+ * Bumped whenever the schema or the prompt changes in a way worth re-running
+ * old documents for. documents.extraction_version records what produced a
+ * row; anything below this is "stale" and re-analysable in bulk.
+ */
+export const EXTRACTION_VERSION = 2;
+
+export const ExpenseItemSchema = z.object({
+  name: z.string().describe("Line item as printed, original language"),
+  quantity: z.number().nullable(),
+  unit_price: z.number().nullable(),
+  amount: z.number().nullable().describe("Line total as printed"),
+  category: z.enum(ITEM_CATEGORIES),
+});
+export const ExpenseSchema = z.object({
+  merchant: z.string().nullable().describe("Payee as printed"),
+  merchant_key: z.string().nullable().describe("Short stable name of the payee, original language, no legal suffixes (株式会社, Co., Ltd.)"),
+  spent_on: z.string().nullable().describe("Date of the expense, ISO YYYY-MM-DD"),
+  total: z.number().nullable().describe("Grand total actually paid or payable"),
+  tax: z.number().nullable().describe("Consumption tax / VAT included in total, if printed"),
+  currency: z.string().describe("ISO 4217, JPY unless printed otherwise"),
+  payment_method: z.enum(PAYMENT_METHODS).nullable(),
+  expense_kind: z.enum(EXPENSE_KINDS).describe("Kind of the expense as a whole"),
+  items: z
+    .array(ExpenseItemSchema)
+    .describe("Line items, best effort, in printed order. Empty when the document has a single amount. Skip subtotal/tax/total lines."),
+});
+export const TableSchema = z.object({
+  title: z.string().nullable().describe("Caption or nearby heading, as printed"),
+  columns: z.array(z.string()).describe("Header cells as printed"),
+  rows: z.array(z.array(z.string())).describe("Body cells as printed, one array per row, same length as columns"),
+});
+
 export const ExtractionSchema = z.object({
   title: z.string().describe("Document title as printed, in its original language"),
   document_type: z.enum(DOCUMENT_TYPES).describe("Closest type; use other if none fits"),
@@ -83,9 +133,30 @@ export const ExtractionSchema = z.object({
   // Everything type-specific. Kept as pairs rather than a free-form object so
   // the schema stays strict.
   other_fields: z.array(z.object({ key: z.string(), value: z.string() })),
+
+  // v2 — labelling and structure. See migrations/0006_enrich.sql.
+  source_lang: z.enum(["ja", "en", "other"]).describe("Language the document is printed in"),
+  handling: z
+    .array(z.enum(HANDLING))
+    .describe("What to do with it. todo = has an action; expense = money left the household/business; record = keep for reference; notice = informational; noise = advertising or junk. Usually one or two values."),
+  issuer_key: z
+    .string()
+    .nullable()
+    .describe("Short stable name of the issuer in its own language, without legal suffixes or department names: 東京電力, 上越市, ヨドバシカメラ, Tokyo Gas"),
+  keywords: z
+    .array(z.string())
+    .max(10)
+    .describe("Up to 10 terms someone might search for, in BOTH Japanese and English where sensible (固定資産税, property tax, 上越市, Joetsu). No sentences."),
+  tables: z
+    .array(TableSchema)
+    .max(4)
+    .describe("Tabular content worth keeping as data (usage history, statements, schedules). Best effort; at most 4 tables, at most 40 rows each. Empty when there is none."),
+  expense: ExpenseSchema.nullable().describe("Present when handling includes expense; null otherwise"),
 });
 
 export type Extraction = z.infer<typeof ExtractionSchema>;
+export type Expense = z.infer<typeof ExpenseSchema>;
+export type ExpenseItem = z.infer<typeof ExpenseItemSchema>;
 
 export type Lang = "en" | "ja";
 
@@ -129,7 +200,24 @@ not a compliant substitute for the original. Answer keep_temporarily if the
 document is clearly personal and small; otherwise unsure.
 
 Never answer digital_sufficient to be helpful. "unsure" is the correct answer
-when you are unsure, and the product surfaces it for human review.`;
+when you are unsure, and the product surfaces it for human review.
+Handling — pick every value that applies:
+- todo: something must be done (pay, sign, reply, attend, renew). Implies action_required.
+- expense: money left, or will leave, the household or business: receipts,
+  paid or payable invoices, utility and phone bills, tax payments, tuition,
+  subscriptions. Fill in "expense" for these, itemising receipts line by line
+  where the lines are legible. A missing line total is null, never invented.
+- record: worth keeping as reference (contracts, certificates, statements,
+  insurance policies, school schedules).
+- notice: informational only, nothing to do, no money.
+- noise: advertising, flyers, junk. Nothing else applies.
+Expense item categories: snacks means confectionery, chips, sweets; groceries
+means food and drink ingredients; beverages means non-alcoholic drinks bought
+as drinks; alcohol as such; household means consumables, cleaning, toiletries.
+Keep item names exactly as printed, abbreviations included.
+Tables: reproduce cells as printed; do not compute or normalise values.
+If the user says who the document is from, trust that for issuer_key and use it
+to resolve an ambiguous or partially legible issuer, but keep issuer as printed.`;
 
 const USER_LANGUAGE: Record<Lang, string> = {
   en: "The user's language is English. Write summary and retention_reason in English.",
@@ -141,6 +229,7 @@ export async function extract(
   ocrText: string,
   image: { data: string; mediaType: string } | null,
   lang: Lang = "en",
+  hint: { from?: string | null } = {},
 ): Promise<ExtractResult> {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
@@ -155,9 +244,13 @@ export async function extract(
       },
     });
   }
+  const from = hint.from?.trim().slice(0, 120);
   content.push({
     type: "text",
-    text: `Document AI OCR output:\n\n<ocr>\n${ocrText}\n</ocr>\n\nExtract the metadata.`,
+    text:
+      `Document AI OCR output:\n\n<ocr>\n${ocrText}\n</ocr>\n\n` +
+      (from ? `The user says this document is from: <from>${from}</from>\n\n` : "") +
+      `Extract the metadata.`,
   });
 
   const response = await client.messages.parse({

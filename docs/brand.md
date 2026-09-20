@@ -91,6 +91,13 @@ Buttons are short noun forms (保存・削除・追加・参加). Confirm dialog
 Tabs: 撮影／書類／要対応 (EN Camera／Papers／To do). The user photographs paper, so
 the verb is 撮る／撮影, never スキャン (except scanning a QR); re-do is 撮り直す.
 「アーカイブ」 is reserved for the sharing container, so the list tab is 「書類」/"Papers".
+The sender is 「差出人」 everywhere (prompt and details row), not 「発行元」; the payee on
+an expense is 「支払先」. Reading, not 解析: 「読み取り直す」 for Re-analyze, 「未読み取り」
+for a filed-but-unread document, 「読み取り版」 for the version row. Handling pills:
+要対応／支出／記録／お知らせ／広告 (「保管」 stays reserved for retention). 「税額」 for the
+tax line of a receipt; 「税金」 for tax as a topic and as a kind of expense (never bare 「税」).
+Topics (分類 row, joined with 「・」): 税金・不動産・公共料金・保険・金融・教育・健康・法律・
+仕事・住まい・車・行政・買い物・その他; housing is 「住まい」 in both lists.
 Half-width `: ` before system error strings.
 
 ## Voice (short)

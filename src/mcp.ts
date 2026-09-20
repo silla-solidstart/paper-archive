@@ -2,9 +2,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import type { Env } from "./types.ts";
-import { ensureLocalUser, getDocument, getUserById, listActions, searchDocuments, updateDocumentRetention } from "./db.ts";
+import { ensureLocalUser, getDocument, getExpense, getUserById, listActions, listExpenseItems, searchDocuments, spendingSummary, updateDocumentRetention } from "./db.ts";
 import { currentSpace } from "./spaces.ts";
-import { RETENTION_STATUSES } from "./extract.ts";
+import { ITEM_CATEGORIES, RETENTION_STATUSES } from "./extract.ts";
 
 /**
  * MCP: the archive as a tool for Claude and other assistants.
@@ -52,8 +52,39 @@ function buildServer(env: Env, spaceId: string): McpServer {
     },
     async ({ id }) => {
       const doc = await getDocument(env, spaceId, id);
-      return doc ? text(doc) : text({ error: "not found" });
+      return doc ? text({ ...doc, expense: await getExpense(env, id) }) : text({ error: "not found" });
     },
+  );
+
+  server.registerTool(
+    "spending_breakdown",
+    {
+      title: "Spending breakdown",
+      description:
+        "Money spent in a month according to receipts, bills and invoices in the archive: total, by kind of " +
+        "expense, by line-item category (groceries, snacks, alcohol, household…), by merchant, and the list of " +
+        "expense documents. Amounts are in the documents' currency (JPY unless stated).",
+      inputSchema: { month: z.string().regex(/^\d{4}-\d{2}$/).describe("YYYY-MM") },
+    },
+    async ({ month }) => text(await spendingSummary(env, spaceId, month)),
+  );
+
+  server.registerTool(
+    "list_expense_items",
+    {
+      title: "List expense line items",
+      description:
+        "Itemised purchases from receipts, filterable by month, category and a name substring. " +
+        "\"How much on snacks in August\" is month=2026-08, category=snacks, then sum the amounts. " +
+        "Names are as printed on the receipt (usually Japanese).",
+      inputSchema: {
+        month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+        category: z.enum(ITEM_CATEGORIES).optional(),
+        query: z.string().max(100).optional().describe("Substring of the item name as printed"),
+        limit: z.number().int().min(1).max(500).optional(),
+      },
+    },
+    async ({ month, category, query, limit }) => text(await listExpenseItems(env, spaceId, { month, category, query, limit })),
   );
 
   server.registerTool(

@@ -62,6 +62,11 @@ export async function getSpaceForUser(env: Env, spaceId: string, userId: string)
   return (rows as SpaceWithRole[])[0] ?? null;
 }
 
+export async function getSpaceById(env: Env, spaceId: string): Promise<SpaceRow | null> {
+  const rows = await sql(env).query(`SELECT * FROM spaces WHERE id = $1`, [spaceId]);
+  return (rows as SpaceRow[])[0] ?? null;
+}
+
 export async function createSpace(env: Env, userId: string, name: string): Promise<SpaceRow> {
   const q = sql(env);
   const [space] = (await q.query(

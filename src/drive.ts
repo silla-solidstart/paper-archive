@@ -104,3 +104,20 @@ export async function uploadFile(
   });
   return (await res.json()) as UploadedFile;
 }
+
+/** The bytes of a file we created. Used by re-analysis; the Worker keeps no copy. */
+export async function downloadFile(token: string, id: string): Promise<{ bytes: ArrayBuffer; mimeType: string } | null> {
+  const res = await driveFetch(token, `${API}/files/${id}?alt=media`);
+  if (res.status === 404) return null;
+  return { bytes: await res.arrayBuffer(), mimeType: (res.headers.get("Content-Type") ?? "application/octet-stream").split(";")[0] };
+}
+
+/** Rename and, when the month folder differs, move. Filed first, named once we know what it is. */
+export async function renameFile(token: string, id: string, name: string, move?: { from: string; to: string }): Promise<void> {
+  const params = move && move.from !== move.to ? `?addParents=${move.to}&removeParents=${move.from}` : "";
+  await driveFetch(token, `${API}/files/${id}${params}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}

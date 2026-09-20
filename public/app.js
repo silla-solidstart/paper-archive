@@ -21,7 +21,7 @@ const MAX_EDGE = 2200;
 const JPEG_QUALITY = 0.85;
 
 const $ = (sel, el = document) => el.querySelector(sel);
-const view = $("#view"), who = $("#who"), fileCam = $("#fileCam"), fileUp = $("#fileUp"), langBtn = $("#lang"), shareBtn = $("#shareBtn"), adminBtn = $("#adminBtn"),
+const view = $("#view"), who = $("#who"), fileCam = $("#fileCam"), fileUp = $("#fileUp"), langBtn = $("#lang"), shareBtn = $("#shareBtn"), adminBtn = $("#adminBtn"), spendBtn = $("#spendBtn"),
       menuBtn = $("#menuBtn"), menu = $("#menu"), signoutEl = $("#signout"), archivesEl = $("#archives"), archLabel = $("#archLabel"), avatarText = $("#avatarText");
 
 // Google's standard sign-in button: four-colour G, Roboto, one language per button (spec in src/google-button.ts).
@@ -78,6 +78,7 @@ const STR = {
     fields: { type: "Type", issuer: "Issuer", date: "Date", amount: "Amount", due: "Due", reference: "Reference", categories: "Categories", status: "Status", model: "Model", ocr: "OCR", lang: "Interpreted in", cost: "Cost", scanned_by: "Captured by" },
     doctype: { tax_notice: "Tax notice", government_notice: "Government notice", utility_bill: "Utility bill", insurance: "Insurance", bank_statement: "Bank statement", invoice: "Invoice", receipt: "Receipt", school_letter: "School letter", medical: "Medical", contract: "Contract", subscription: "Subscription", advertisement: "Advertisement", other: "Other" },
     lang_name: { en: "English", ja: "日本語" },
+    category: { tax: "tax", property: "property", utilities: "utilities", insurance: "insurance", finance: "finance", education: "education", health: "health", legal: "legal", employment: "employment", housing: "housing", vehicle: "vehicle", government: "government", shopping: "shopping", other: "other" },
     // spaces
     spaces: "Archives", space: "Archive", your_archive: "Your archive", shared_with_you: "Shared with you", current: "default", owner: "yours", member: "shared",
     members_n: (n) => `${n} ${n === 1 ? "person" : "people"}`,
@@ -100,6 +101,19 @@ const STR = {
     admin_bootstrap: (list) => `Always allowed (config): ${list}`, entry: "Email or @domain", role: "Role", note: "Note (optional)", added: "Added", add: "Add",
     role_admin: "admin", role_member: "member", confirm_remove_entry: (e) => `Remove ${e} from the allow-list?`,
     costs_title: "Costs, all users", attempts: "scans", spend: "spend", avg_scan: "avg / scan",
+    // v2: labels, sender, expenses, re-analysis
+    handling: { todo: "To do", expense: "Expense", record: "Record", notice: "Notice", noise: "Junk" },
+    expense_kind: { groceries: "Groceries", dining: "Dining", transport: "Transport", utilities: "Utilities", housing: "Housing", medical: "Medical", education: "Education", clothing: "Clothing", household: "Household", electronics: "Electronics", entertainment: "Entertainment", subscription: "Subscription", insurance: "Insurance", tax: "Tax", business: "Business", other: "Other" },
+    item_category: { groceries: "Groceries", snacks: "Snacks", alcohol: "Alcohol", beverages: "Drinks", household: "Household", dining: "Dining", transport: "Transport", utilities: "Utilities", medical: "Medical", education: "Education", clothing: "Clothing", electronics: "Electronics", entertainment: "Entertainment", subscription: "Subscription", fees: "Fees", tax: "Tax", business: "Business", other: "Other" },
+    who_from: "Who is it from?", from_ph: "e.g. 宮原, Joetsu City", from_missing: "The paper doesn't say who sent it.", edit: "Edit",
+    reanalyze: "Re-analyze", reanalyzing: "Re-analyzing…", reanalyzed: "Updated with the latest reading.", reanalyze_failed: (m) => `Re-analysis failed: ${m}`,
+    filed_pending: "Saved to Drive, but reading it failed. Open it and re-analyze to try again.",
+    pill_failed: "not read", version: "Reading version",
+    expense: "Expense", items: "Items", total: "Total", tax: "Tax", payment: "Paid by", kind: "Kind", merchant: "Merchant",
+    payment_method: { cash: "cash", card: "card", transfer: "bank transfer", direct_debit: "direct debit", e_money: "e-money", other: "other" },
+    spending: "Spending", by_category: "By item category", by_kind: "By kind", by_merchant: "By merchant", receipts: "Receipts and bills",
+    no_spending: "No expenses recorded this month.", items_n: (n) => `${n} item${n === 1 ? "" : "s"}`, expenses_n: (n) => `${n} document${n === 1 ? "" : "s"}`,
+    tables: "Tables",
   },
   ja: {
     tab_camera: "撮影", tab_archive: "書類", tab_todo: "要対応",
@@ -129,9 +143,10 @@ const STR = {
     delete_failed: (m) => `削除できませんでした: ${m}`, save_failed: (m) => `保存できませんでした: ${m}`,
     cost: (jpy, usd, tokens) => `約¥${jpy}（US$${usd}）・${tokens.toLocaleString()}トークン`,
     cost_short: (jpy) => `約¥${jpy}`,
-    fields: { type: "種類", issuer: "発行元", date: "日付", amount: "金額", due: "期限", reference: "番号", categories: "分類", status: "状態", model: "モデル", ocr: "OCR", lang: "解析言語", cost: "費用", scanned_by: "撮影した人" },
+    fields: { type: "種類", issuer: "差出人", date: "日付", amount: "金額", due: "期限", reference: "番号", categories: "分類", status: "状態", model: "モデル", ocr: "OCR", lang: "解析言語", cost: "費用", scanned_by: "撮影した人" },
     doctype: { tax_notice: "納税通知書", government_notice: "行政からの通知", utility_bill: "公共料金", insurance: "保険", bank_statement: "銀行明細", invoice: "請求書", receipt: "領収書", school_letter: "学校からのお知らせ", medical: "医療", contract: "契約書", subscription: "定期契約", advertisement: "広告", other: "その他" },
     lang_name: { en: "English", ja: "日本語" },
+    category: { tax: "税金", property: "不動産", utilities: "公共料金", insurance: "保険", finance: "金融", education: "教育", health: "健康", legal: "法律", employment: "仕事", housing: "住まい", vehicle: "車", government: "行政", shopping: "買い物", other: "その他" },
     spaces: "アーカイブ", space: "アーカイブ", your_archive: "自分のアーカイブ", shared_with_you: "共有されたアーカイブ", current: "既定", owner: "所有者", member: "メンバー",
     members_n: (n) => `${n}人`,
     archives_hint: "自分のアーカイブは1つです。共有されたアーカイブを既定にすることもでき、いつでも戻せます。撮影した書類は既定のアーカイブに入ります。自分のアーカイブは自分のGoogleドライブに、共有されたものは所有者のドライブに保存されます。",
@@ -153,6 +168,18 @@ const STR = {
     admin_bootstrap: (list) => `常に許可（設定）: ${list}`, entry: "メールアドレスまたは @ドメイン", role: "権限", note: "メモ（任意）", added: "追加日", add: "追加",
     role_admin: "管理者", role_member: "メンバー", confirm_remove_entry: (e) => `${e} を許可リストから削除しますか？`,
     costs_title: "費用（全ユーザー）", attempts: "件", spend: "合計", avg_scan: "1件あたり",
+    handling: { todo: "要対応", expense: "支出", record: "記録", notice: "お知らせ", noise: "広告" },
+    expense_kind: { groceries: "食料品", dining: "外食", transport: "交通", utilities: "公共料金", housing: "住まい", medical: "医療", education: "教育", clothing: "衣類", household: "日用品", electronics: "家電", entertainment: "娯楽", subscription: "定期契約", insurance: "保険", tax: "税金", business: "事業", other: "その他" },
+    item_category: { groceries: "食料品", snacks: "お菓子", alcohol: "お酒", beverages: "飲料", household: "日用品", dining: "外食", transport: "交通", utilities: "公共料金", medical: "医療", education: "教育", clothing: "衣類", electronics: "家電", entertainment: "娯楽", subscription: "定期契約", fees: "手数料", tax: "税金", business: "事業", other: "その他" },
+    who_from: "差出人は？", from_ph: "例: 宮原、上越市", from_missing: "差出人が書かれていません。", edit: "編集",
+    reanalyze: "読み取り直す", reanalyzing: "読み取り中", reanalyzed: "最新の読み取りに更新しました。", reanalyze_failed: (m) => `読み取り直せませんでした: ${m}`,
+    filed_pending: "Googleドライブには保存しましたが、読み取りに失敗しました。開いて読み取り直してください。",
+    pill_failed: "未読み取り", version: "読み取り版",
+    expense: "支出", items: "明細", total: "合計", tax: "税額", payment: "支払い方法", kind: "種類", merchant: "支払先",
+    payment_method: { cash: "現金", card: "カード", transfer: "振込", direct_debit: "口座振替", e_money: "電子マネー", other: "その他" },
+    spending: "支出", by_category: "品目別", by_kind: "種類別", by_merchant: "支払先別", receipts: "レシート・請求書",
+    no_spending: "この月の支出はありません。", items_n: (n) => `${n}点`, expenses_n: (n) => `${n}件`,
+    tables: "表",
   },
 };
 const t = (key, ...args) => { const v = STR[state.lang][key]; return typeof v === "function" ? v(...args) : v; };
@@ -164,6 +191,7 @@ function applyLang() {
   langBtn.querySelector("span").textContent = state.lang === "en" ? "日本語" : "EN";
   langBtn.title = t("lang_name")[state.lang === "en" ? "ja" : "en"];
   shareBtn.querySelector("span").textContent = t("share");
+  spendBtn.querySelector("span").textContent = t("spending");
   adminBtn.querySelector("span").textContent = t("admin");
   signoutEl.querySelector("span").textContent = t("signout");
   archLabel.textContent = t("space");
@@ -177,6 +205,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") openMenu(f
 window.addEventListener("hashchange", () => openMenu(false));
 shareBtn.addEventListener("click", () => { location.hash = "#/share"; });
 adminBtn.addEventListener("click", () => { location.hash = "#/admin"; });
+spendBtn.addEventListener("click", () => { location.hash = "#/spending"; });
 langBtn.addEventListener("click", () => {
   state.lang = state.lang === "en" ? "ja" : "en";
   try { localStorage.setItem("pa_lang", state.lang); } catch {}
@@ -276,6 +305,7 @@ const routes = [
   [/^#\/space\/([0-9a-f-]{36})$/, spaceView],
   [/^#\/join\/([A-Za-z0-9_-]{20,64})$/, joinView],
   [/^#\/share$/, shareView],
+  [/^#\/spending(?:\/(\d{4}-\d{2}))?$/, spendingView],
   [/^#\/admin$/, adminView],
 ];
 
@@ -366,8 +396,11 @@ async function process(file) {
     result.innerHTML = "";
     result.appendChild(resultCard(data));
   } catch (err) {
-    const stage = err.body && err.body.stage ? ` (${err.body.stage})` : "";
-    status.textContent = `${t("failed")}: ${err.message}${stage}`;
+    const b = err.body || {};
+    if (b.error === "reconnect_google") status.innerHTML = t("reconnect", "/auth/login");
+    else if (b.error === "owner_no_drive") status.textContent = state.signedIn ? t("not_filed") : t("not_filed_self");
+    else if (b.id) status.innerHTML = `${t("filed_pending")} <a href="#/doc/${esc(b.id)}">${t("open")}</a>`;
+    else status.textContent = `${t("failed")}: ${err.message}${b.stage ? ` (${b.stage})` : ""}`;
   } finally {
     btn.disabled = false; if (up) up.disabled = false;
   }
@@ -377,7 +410,7 @@ async function process(file) {
 async function archiveView() {
   if (gate()) return;
   view.innerHTML = `
-    <h2>${t("tab_archive")}${state.space ? ` · ${esc(state.space.name)}` : ""}</h2>
+    <div class="h2row"><h2>${t("tab_archive")}${state.space ? ` · ${esc(state.space.name)}` : ""}</h2><a class="pill hi" href="#/spending">${icon("receipt")} ${t("spending")}</a></div>
     <div class="search"><input id="q" type="search" placeholder="${esc(t("search_ph"))}" autocomplete="off"></div>
     <div id="list" class="empty">${t("loading")}</div>`;
   const q = $("#q");
@@ -421,17 +454,17 @@ async function fillList(sel, path, emptyText, emptyIcon = "inbox", stillWanted =
 async function docView(id) {
   if (gate()) return;
   view.innerHTML = `<div class="empty">${t("loading")}</div>`;
-  let d;
-  try { ({ document: d } = await api(`/api/documents/${id}`)); }
+  let d, expense;
+  try { ({ document: d, expense } = await api(`/api/documents/${id}`)); }
   catch (err) { view.innerHTML = `<div class="empty">${err.status === 404 ? t("not_found") : esc(err.message)}</div>`; return; }
 
   const x = d.extracted_data || {};
   const F = t("fields");
   const fields = [
-    [F.type, tt("doctype", d.document_type)], [F.issuer, d.issuer], [F.date, d.document_date],
+    [F.type, tt("doctype", d.document_type)], [F.date, d.document_date],
     [F.amount, x.amount != null ? `${x.currency || ""} ${Number(x.amount).toLocaleString()}` : null],
     [F.due, x.due_date], [F.reference, x.reference_number],
-    [F.categories, Array.isArray(x.categories) ? x.categories.join(", ") : null],
+    [F.categories, Array.isArray(x.categories) ? x.categories.map((c) => tt("category", c)).join(state.lang === "ja" ? "・" : ", ") : null],
     ...Object.entries(x).filter(([k]) => !["amount", "currency", "due_date", "reference_number", "categories"].includes(k)).map(([k, v]) => [k, String(v)]),
   ].filter(([, v]) => v != null && v !== "");
   // Operational rows: useful to the operator, noise to a household member.
@@ -440,7 +473,10 @@ async function docView(id) {
     [F.lang, d.lang ? t("lang_name")[d.lang] || d.lang : null],
     [F.cost, state.admin && d.cost_usd != null ? costLine({ total_usd: Number(d.cost_usd), total_jpy: Number(d.cost_usd) * 150, tokens: (d.llm_input_tokens || 0) + (d.llm_output_tokens || 0) }) : null],
     [F.model, state.admin ? d.extraction_model : null], [F.ocr, state.admin ? d.ocr_provider : null],
+    [t("version"), d.extraction_version ? `v${d.extraction_version}${d.extracted_at ? " · " + String(d.extracted_at).slice(0, 10) : ""}` : null],
   ].filter(([, v]) => v != null && v !== "");
+  const tables = Array.isArray(x.tables) ? x.tables : [];
+  const fieldRows = fields.filter(([k]) => k !== "tables");
 
   const driveLink = d.drive_file_id ? `https://drive.google.com/file/d/${encodeURIComponent(d.drive_file_id)}/view` : null;
 
@@ -451,17 +487,32 @@ async function docView(id) {
       ${actionLine(d)}
       <div class="keep" id="keep">${retentionLabel(d.retention)} <span class="meta">— ${esc(d.retention_reason || "")}</span></div>
       ${decideButtons(d.id)}
-      ${driveLink ? `<div class="drive">${icon("folder-open")} <a href="${driveLink}" target="_blank" rel="noopener">${t("open_drive")}</a></div>`
-                  : d.status === "failed" ? `<div class="notice">${t("not_in_drive")}</div>` : ""}
-      <dl class="fields">${fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+      ${handlingPills(d.handling)}
+      ${d.status === "failed" ? `<div class="notice">${t("filed_pending")}</div>` : ""}
+      ${driveLink ? `<div class="drive">${icon("folder-open")} <a href="${driveLink}" target="_blank" rel="noopener">${t("open_drive")}</a></div>` : ""}
+      <div id="sender">${senderBlock(d)}</div>
+      <dl class="fields">${fieldRows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+      ${expenseBlock(expense)}
+      ${tables.length ? `<details><summary class="meta">${t("tables")} · ${tables.length}</summary>${tables.map(tableHtml).join("")}</details>` : ""}
       <details><summary class="meta">${t("ocr_text")}</summary><pre>${esc(d.ocr_text || "")}</pre></details>
       <details><summary class="meta">${t("details")}</summary><dl class="fields">${tech.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></details>
+      <div class="status" id="reStatus"></div>
       <div class="footer-actions">
         <a href="#/archive" class="meta">${t("back_archive")}</a>
-        <button class="small danger" id="del">${icon("trash-2")} ${t("delete")}</button>
+        <span class="row">
+          <button class="small" id="re">${icon("refresh-cw")} ${t("reanalyze")}</button>
+          <button class="small danger" id="del">${icon("trash-2")} ${t("delete")}</button>
+        </span>
       </div>
     </div>`;
   wireDecide(view, d.id);
+  wireSender(view, d);
+  $("#re").addEventListener("click", async () => {
+    const b = $("#re"), st = $("#reStatus");
+    b.disabled = true; st.textContent = t("reanalyzing");
+    try { await postJson(`/api/documents/${d.id}/reanalyze`, {}); st.textContent = t("reanalyzed"); docView(d.id); }
+    catch (err) { b.disabled = false; st.textContent = t("reanalyze_failed", err.message); }
+  });
   $("#del").addEventListener("click", async () => {
     if (!confirm(t("confirm_delete"))) return;
     try { await api(`/api/documents/${d.id}`, { method: "DELETE" }); location.hash = "#/archive"; }
@@ -765,7 +816,8 @@ function listCard(d) {
       <span class="meta">${esc(meta)}</span>
       ${due ? `<span class="pill ${due.cls}">${esc(d.action_type ? tt("action", d.action_type) : t("action_required"))}${due.text ? " · " + due.text : ""}</span>` : ""}
       ${d.retention === "unsure" ? `<span class="pill warn">${t("pill_review")}</span>` : ""}
-      ${d.status === "failed" ? `<span class="pill">${t("pill_not_in_drive")}</span>` : ""}
+      ${d.status === "failed" ? `<span class="pill">${t("pill_failed")}</span>` : ""}
+      ${Array.isArray(d.handling) && d.handling.includes("expense") ? `<span class="pill">${tt("handling", "expense")}</span>` : ""}
       ${jpy != null ? `<span class="pill">${t("cost_short", jpy)}</span>` : ""}
     </div>`;
   return a;
@@ -777,21 +829,129 @@ function resultCard(data) {
   const money = x.amount != null ? `${x.currency || ""} ${Number(x.amount).toLocaleString()}` : null;
   let drive = "";
   if (data.filed) drive = `<div class="drive">${icon("folder-open")} <a href="${esc(data.filed.link)}" target="_blank" rel="noopener">${esc(data.filed.path)}</a></div>`;
-  else if (data.filing_error === "reconnect_google") drive = `<div class="notice">${t("reconnect", "/auth/login")}</div>`;
-  else if (data.filing_error === "owner_no_drive") drive = `<div class="meta">${state.signedIn ? t("not_filed") : t("not_filed_self")}</div>`;
-  else if (data.filing_error) drive = `<div class="notice">${t("filing_failed")}</div>`;
+  else if (data.dry) drive = `<div class="meta">${t("not_filed_self")}</div>`;
+  const ex = x.expense && Array.isArray(x.handling) && x.handling.includes("expense") ? x.expense : null;
   el.innerHTML = `
     <h3>${esc(x.title)}</h3>
     <div class="meta">${esc([tt("doctype", x.document_type), x.issuer, x.document_date, money].filter(Boolean).join(" · "))}</div>
     <div class="meta">${esc(x.summary)}</div>
+    ${handlingPills(x.handling)}
     ${actionLine(x)}
     <div class="keep" id="keep">${retentionLabel(x.retention)} <span class="meta">— ${esc(x.retention_reason)}</span></div>
     ${data.id ? decideButtons(data.id) : ""}
+    ${ex ? `<div class="meta">${icon("receipt")} ${esc([tt("expense_kind", ex.expense_kind), ex.merchant_key || ex.merchant, ex.total != null ? fmtMoney(ex.total, ex.currency) : null, ex.items.length ? t("items_n", ex.items.length) : null].filter(Boolean).join(" · "))}</div>` : ""}
+    ${data.id ? `<div id="sender">${senderBlock({ id: data.id, issuer: x.issuer })}</div>` : ""}
     ${drive}
     ${state.admin && data.cost ? `<div class="meta">${t("fields").cost}: ${esc(costLine(data.cost))}</div>` : ""}
     <details><summary class="meta">${t("ocr", data.ocr.pages, data.ocr.chars)} · ${data.id ? `<a href="#/doc/${data.id}">${t("open")}</a>` : t("not_indexed")}</summary><pre>${esc(data.ocr.text)}</pre></details>`;
-  if (data.id) wireDecide(el, data.id);
+  if (data.id) { wireDecide(el, data.id); wireSender(el, { id: data.id, issuer: x.issuer }); }
   return el;
+}
+
+// ---------- v2 helpers: labels, sender, expenses, spending ----------
+
+const fmtMoney = (n, cur = "JPY") => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "";
+  return cur === "JPY" || !cur ? `¥${Math.round(v).toLocaleString()}` : `${cur} ${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+};
+
+function handlingPills(h) {
+  if (!Array.isArray(h) || !h.length) return "";
+  return `<div class="row tags">${h.map((k) => `<span class="pill ${k === "todo" ? "warn" : ""}">${esc(tt("handling", k))}</span>`).join("")}</div>`;
+}
+
+/** The sender line: printed issuer with an edit pencil, or — when the paper does not say — a prompt. */
+function senderBlock(d) {
+  const F = t("fields");
+  if (d.issuer) return `<div class="sender"><span class="meta">${esc(F.issuer)}</span> <b>${esc(d.issuer)}</b> <button class="link" data-edit-sender aria-label="${esc(t("edit"))}">${icon("pencil")}</button></div>`;
+  return `<div class="sender ask"><div class="meta">${t("from_missing")}</div>${senderForm(d.issuer)}</div>`;
+}
+function senderForm(current) {
+  return `<form class="from" data-sender-form><input name="issuer" maxlength="60" placeholder="${esc(t("from_ph"))}" value="${esc(current || "")}" aria-label="${esc(t("who_from"))}"><button class="small" type="submit">${t("save")}</button></form><div class="chips" data-chips></div>`;
+}
+function wireSender(root, d) {
+  const box = root.querySelector("#sender"); if (!box) return;
+  const arm = () => {
+    const edit = box.querySelector("[data-edit-sender]");
+    if (edit) edit.addEventListener("click", () => { box.innerHTML = `<div class="sender ask"><div class="meta">${t("who_from")}</div>${senderForm(d.issuer)}</div>`; arm(); });
+    const form = box.querySelector("[data-sender-form]");
+    if (!form) return;
+    const input = form.querySelector("input");
+    // Chips: senders this archive already knows, so a name is typed once.
+    api("/api/issuers").then(({ issuers }) => {
+      const chips = box.querySelector("[data-chips]"); if (!chips) return;
+      chips.innerHTML = issuers.slice(0, 8).map((i) => `<button type="button" class="chip" data-v="${esc(i.issuer_key)}"><span>${esc(i.issuer_key)}</span></button>`).join("");
+      chips.querySelectorAll("[data-v]").forEach((c) => c.addEventListener("click", () => { input.value = c.dataset.v; form.requestSubmit(); }));
+    }).catch(() => {});
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const issuer = input.value.trim(); if (!issuer) return;
+      form.querySelector("button").disabled = true;
+      try { await postJson(`/api/documents/${d.id}/issuer`, { issuer }, "PATCH"); d.issuer = issuer; box.innerHTML = senderBlock(d); arm(); }
+      catch (err) { form.querySelector("button").disabled = false; alert(t("save_failed", err.message)); }
+    });
+  };
+  arm();
+}
+
+function expenseBlock(e) {
+  if (!e) return "";
+  const rows = [
+    [t("kind"), tt("expense_kind", e.expense_kind)], [t("merchant"), e.merchant_key || e.merchant],
+    [t("total"), e.total != null ? fmtMoney(e.total, e.currency) : null], [t("tax"), e.tax != null ? fmtMoney(e.tax, e.currency) : null],
+    [t("payment"), e.payment_method ? tt("payment_method", e.payment_method) : null],
+  ].filter(([, v]) => v != null && v !== "");
+  const items = e.items || [];
+  return `<div class="expense">
+    <div class="meta">${icon("receipt")} ${t("expense")}</div>
+    <dl class="fields">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+    ${items.length ? `<details open class="items"><summary class="meta">${t("items")} · ${t("items_n", items.length)}</summary><table>${items.map((it) =>
+      `<tr><td>${esc(it.name)}${it.quantity && it.quantity !== 1 ? ` <span class="meta">×${esc(it.quantity)}</span>` : ""}</td><td class="meta">${esc(tt("item_category", it.category))}</td><td class="num">${it.amount != null ? fmtMoney(it.amount, e.currency) : ""}</td></tr>`).join("")}</table></details>` : ""}
+  </div>`;
+}
+
+function tableHtml(tb) {
+  const cols = Array.isArray(tb.columns) ? tb.columns : [], rows = Array.isArray(tb.rows) ? tb.rows : [];
+  return `<div class="tbl">${tb.title ? `<div class="meta">${esc(tb.title)}</div>` : ""}<table>${cols.length ? `<tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>` : ""}${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table></div>`;
+}
+
+function barList(rows, labelOf, amountOf, cur) {
+  if (!rows.length) return `<div class="meta">—</div>`;
+  const max = Math.max(...rows.map(amountOf), 1);
+  return `<div class="bars">${rows.map((r) => `<div class="bar"><span class="l">${esc(labelOf(r))}</span><span class="v">${fmtMoney(amountOf(r), cur)}</span><span class="track"><span class="fill" style="width:${Math.max(2, Math.round(amountOf(r) / max * 100))}%"></span></span></div>`).join("")}</div>`;
+}
+
+/** Spending: one month of the expense ledger. */
+async function spendingView(month) {
+  if (gate()) return;
+  view.innerHTML = `<div class="empty">${t("loading")}</div>`;
+  let s;
+  try { s = await api(`/api/spending${month ? `?month=${month}` : ""}`); }
+  catch (err) { view.innerHTML = `<div class="empty">${err.status === 503 ? t("no_db") : t("could_not_load", err.message)}</div>`; return; }
+  const months = s.months.map((m) => m.month);
+  const cur = months.indexOf(s.month);
+  const prev = cur >= 0 ? months[cur + 1] : months.find((m) => m < s.month);
+  const next = cur > 0 ? months[cur - 1] : null;
+  const label = (m) => state.lang === "ja" ? `${m.slice(0, 4)}年${Number(m.slice(5))}月` : new Date(m + "-01T00:00:00").toLocaleDateString("en", { month: "long", year: "numeric" });
+  const currency = (s.expenses[0] && s.expenses[0].currency) || "JPY";
+  view.innerHTML = `
+    <div class="monthnav">
+      <a class="chip icon-only" href="#/spending/${prev || s.month}" ${prev ? "" : 'aria-disabled="true"'}>${icon("chevron-left")}</a>
+      <h2>${esc(label(s.month))}</h2>
+      <a class="chip icon-only" href="#/spending/${next || s.month}" ${next ? "" : 'aria-disabled="true"'}>${icon("chevron-right")}</a>
+    </div>
+    <div class="card">
+      <div class="hero">${fmtMoney(s.total, currency)}</div>
+      <div class="meta">${t("spending")} · ${t("expenses_n", s.expenses.length)}${s.tax ? ` · ${t("tax")} ${fmtMoney(s.tax, currency)}` : ""}</div>
+    </div>
+    ${s.expenses.length ? `
+    <div class="card"><h3>${t("by_category")}</h3>${barList(s.by_category, (r) => tt("item_category", r.category), (r) => r.amount, currency)}</div>
+    <div class="card"><h3>${t("by_kind")}</h3>${barList(s.by_kind, (r) => tt("expense_kind", r.kind), (r) => r.amount, currency)}</div>
+    <div class="card"><h3>${t("by_merchant")}</h3>${barList(s.by_merchant, (r) => r.merchant, (r) => r.amount, currency)}</div>
+    <h2>${t("receipts")}</h2>
+    ${s.expenses.map((e) => `<a class="card" href="#/doc/${e.id}"><h3>${esc(e.merchant || e.title)}</h3><div class="row"><span class="meta">${esc([e.spent_on, tt("expense_kind", e.expense_kind), e.items ? t("items_n", e.items) : null].filter(Boolean).join(" · "))}</span><span class="pill">${fmtMoney(e.total, e.currency)}</span></div></a>`).join("")}`
+    : emptyState("receipt", t("no_spending"))}`;
 }
 
 function decideButtons(id) {

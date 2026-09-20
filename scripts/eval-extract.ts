@@ -51,7 +51,8 @@ for (const f of files) {
   const body = readFileSync(path.join(corpusDir, f));
   const started = Date.now();
   try {
-    const res = await fetch(`${BASE}/api/process`, {
+    // dry=1: OCR + extraction only; nothing is indexed or filed (operator path).
+    const res = await fetch(`${BASE}/api/process?dry=1`, {
       method: "POST",
       headers: { Authorization: auth, "Content-Type": mime, "X-Filename": encodeURIComponent(f) },
       body,

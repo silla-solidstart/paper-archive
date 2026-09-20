@@ -38,6 +38,9 @@ curl "localhost:8787/api/search?q=固定資産税" -H "Authorization: Bearer $AP
 Other routes, session cookie or bearer: `GET /api/me`, `GET /api/documents/:id`,
 `DELETE /api/documents/:id` (trashes the Drive file too),
 `PATCH /api/documents/:id/retention` with `{ "retention": "keep_original", "reason": "..." }`.
+`PATCH /api/documents/:id/issuer` names the sender; `POST /api/documents/:id/reanalyze` re-runs
+extraction from the Drive original; `GET /api/spending?month=YYYY-MM` and
+`GET /api/expense-items?month=&category=&q=` read the expense ledger.
 
 The PWA (`public/`, no build step) has three tabs — Camera / Papers / To do (the archive list with search on top) — and a document
 view; it is installable (manifest + service worker; the shell is cached, the API never is).

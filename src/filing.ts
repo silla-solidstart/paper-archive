@@ -1,15 +1,20 @@
 import type { Env } from "./types.ts";
 import type { UserRow } from "./db.ts";
 import type { Extraction } from "./extract.ts";
-import { createFolder, ensureFolderPath, ensureRootFolder, folderExists, uploadFile } from "./drive.ts";
+import { createFolder, ensureFolderPath, ensureRootFolder, folderExists, renameFile, uploadFile } from "./drive.ts";
 import { userAccessToken } from "./oauth.ts";
-import { jpegToPdf } from "./pdf.ts";
 import { updateSpaceDriveFolder, type SpaceRow } from "./spaces.ts";
 
 /**
  * Filing: Paper Archive / <space name> / YYYY / MM / YYYY-MM-DD_issuer_title.ext
  * in the SPACE OWNER's Drive, uploaded with the owner's grant. Folders are for
  * the human browsing Drive. Postgres is the real index.
+ *
+ * Drive first (hard rule, 2026-09-20): the photo as sent is uploaded
+ * byte-for-byte BEFORE OCR runs, under the month it was scanned, with a
+ * provisional name. Once extraction succeeds the file is renamed — and moved
+ * to the document's own month if that differs. Nothing is ever wrapped or
+ * re-encoded; what the phone sent is what Drive holds.
  */
 
 const EXT: Record<string, string> = {
@@ -48,38 +53,48 @@ async function ensureSpaceFolder(env: Env, owner: UserRow, space: SpaceRow, toke
   return id;
 }
 
-export async function fileToDrive(
+export interface Staged extends Filed {
+  token: string;
+  spaceFolderId: string;
+  folderId: string;
+  month: string; // YYYY-MM the file currently sits under
+}
+
+/** Stage 1: the bytes reach Drive before anything is spent on reading them. */
+export async function stageToDrive(
   env: Env,
   owner: UserRow,
   space: SpaceRow,
   bytes: ArrayBuffer,
   mimeType: string,
-  x: Extraction,
-): Promise<Filed> {
+): Promise<Staged> {
   const token = await userAccessToken(env, owner);
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z"); // 20260920T101530Z
+  const filename = `${stamp}.${EXT[mimeType] ?? "bin"}`;
+  const [yyyy, mm] = now.toISOString().slice(0, 7).split("-");
 
-  // Photos are filed as single-page PDFs with the JPEG embedded verbatim, so
-  // Drive shows a document rather than a picture. PDFs pass through. PNG and
-  // WebP would need decoding, so they are uploaded as-is.
-  let payload = bytes;
-  let uploadType = mimeType;
-  if (mimeType === "image/jpeg") {
-    payload = jpegToPdf(new Uint8Array(bytes)).buffer as ArrayBuffer;
-    uploadType = "application/pdf";
-  }
-
-  const filename = buildFilename(x, uploadType, today);
-  const [yyyy, mm] = (x.document_date ?? today).split("-");
-
-  const spaceFolder = await ensureSpaceFolder(env, owner, space, token);
-  const folder = await ensureFolderPath(token, spaceFolder, [yyyy, mm]);
-  const uploaded = await uploadFile(token, folder, filename, uploadType, payload);
-
+  const spaceFolderId = await ensureSpaceFolder(env, owner, space, token);
+  const folderId = await ensureFolderPath(token, spaceFolderId, [yyyy, mm]);
+  const uploaded = await uploadFile(token, folderId, filename, mimeType, bytes);
   return {
-    fileId: uploaded.id,
-    filename: uploaded.name,
-    link: uploaded.webViewLink,
+    token, spaceFolderId, folderId, month: `${yyyy}-${mm}`,
+    fileId: uploaded.id, filename: uploaded.name, link: uploaded.webViewLink,
     path: `${space.name}/${yyyy}/${mm}/${filename}`,
   };
+}
+
+/** Stage 2: once we know what it is, name it — and move it to its own month. */
+export async function finishFiling(staged: Staged, space: SpaceRow, mimeType: string, x: Extraction): Promise<Filed> {
+  const today = new Date().toISOString().slice(0, 10);
+  const filename = buildFilename(x, mimeType, today);
+  const month = (x.document_date ?? today).slice(0, 7);
+  let folderId = staged.folderId;
+  if (month !== staged.month) {
+    const [yyyy, mm] = month.split("-");
+    folderId = await ensureFolderPath(staged.token, staged.spaceFolderId, [yyyy, mm]);
+  }
+  await renameFile(staged.token, staged.fileId, filename, { from: staged.folderId, to: folderId });
+  const [yyyy, mm] = month.split("-");
+  return { fileId: staged.fileId, filename, link: staged.link, path: `${space.name}/${yyyy}/${mm}/${filename}` };
 }

@@ -4,35 +4,45 @@ import { extract } from "./extract.ts";
 import { requireBearer } from "./auth.ts";
 import { handleMcp } from "./mcp.ts";
 import {
+  applyExtraction,
   deleteDocument,
   ensureLocalUser,
   getDocument,
+  getExpense,
   getUserById,
   hasDatabase,
-  insertDocument,
+  insertStagedDocument,
   costSummary,
   listActions,
+  listExpenseItems,
+  listIssuers,
   listRecent,
+  listStale,
+  markDocumentFailed,
   pingDatabase,
   recordScanCost,
   searchDocuments,
+  setDocumentOcr,
+  spendingSummary,
   updateDocumentFiling,
+  updateDocumentIssuer,
   updateDocumentRetention,
   type UserRow,
 } from "./db.ts";
-import { RETENTION_STATUSES, type Lang, type RetentionStatus } from "./extract.ts";
-import { estimateCost, PRICING_AS_OF } from "./pricing.ts";
+import { EXTRACTION_MODEL, EXTRACTION_VERSION, ITEM_CATEGORIES, RETENTION_STATUSES, type Extraction, type Lang, type RetentionStatus } from "./extract.ts";
+import { estimateCost, PRICING_AS_OF, type Cost } from "./pricing.ts";
+import type { OcrResult } from "./docai.ts";
 import { callback, login, logout, ReconnectRequired } from "./oauth.ts";
 import { readSession } from "./session.ts";
 import { accessFor, addAllowed, listAllowed, normaliseEntry, removeAllowed } from "./allow.ts";
 import { sharePage, signInPage } from "./gate.ts";
-import { fileToDrive, type Filed } from "./filing.ts";
+import { buildFilename, finishFiling, stageToDrive, type Filed, type Staged } from "./filing.ts";
 import {
   acceptInvite, cleanName, createInvite, createSpace, getInvite, getSpaceForUser, listInvites, listMembers,
-  listSpaces, removeMember, renameSpace, revokeInvite, setCurrentSpace, currentSpace, spaceOwner,
+  listSpaces, removeMember, renameSpace, revokeInvite, setCurrentSpace, currentSpace, spaceOwner, getSpaceById,
   type SpaceWithRole,
 } from "./spaces.ts";
-import { trashFile } from "./drive.ts";
+import { downloadFile, renameFile, trashFile } from "./drive.ts";
 import { userAccessToken } from "./oauth.ts";
 
 /**
@@ -46,13 +56,20 @@ import { userAccessToken } from "./oauth.ts";
  *
  *   GET  /auth/login | /auth/callback | /auth/logout
  *   GET  /api/me        current user (session only)
- *   POST /api/process   OCR → extraction → index → Drive (session)
+ *   POST /api/process   Drive (original, first) → OCR → extraction → index → rename
+ *                       ?dry=1 (operator): OCR + extraction only, nothing stored
+ *   POST /api/documents/:id/reanalyze   re-run extraction (original from Drive) — versioned, ledgered
+ *   GET  /api/issuers   senders seen in this archive ("who is it from?" chips)
+ *   GET  /api/spending?month=YYYY-MM    expense ledger summary
+ *   GET  /api/expense-items?month=&category=&q=   line items ("snacks in August")
+ *   GET  /api/admin/stale               documents below the current extraction version
  *   GET  /api/recent    inbox
  *   GET  /api/actions   documents needing something, soonest deadline first
  *   GET  /api/search?q= keyword search (Japanese-capable, trigram)
  *   GET  /api/documents/:id
  *   DELETE /api/documents/:id            removes the index row; trashes the Drive file
  *   PATCH /api/documents/:id/retention   { retention, reason? } — the human's call
+ *   PATCH /api/documents/:id/issuer      { issuer } — the human names the sender; survives re-analysis
  *   Spaces (all scoped to the caller's current space):
  *   GET  /api/spaces · POST /api/spaces {name} · POST /api/spaces/:id/select
  *   PATCH /api/spaces/:id {name} (owner) · GET /api/spaces/:id/members
@@ -314,7 +331,7 @@ export default {
       return json({ documents: await searchDocuments(env, space.id, q.slice(0, 200), limit) });
     }
 
-    const doc = path.match(/^\/api\/documents\/([0-9a-f-]{36})(\/retention)?$/);
+    const doc = path.match(/^\/api\/documents\/([0-9a-f-]{36})(\/retention|\/issuer)?$/);
     if (doc) {
       if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
       const { space } = await callerContext(env, caller);
@@ -323,10 +340,34 @@ export default {
 
       if (!doc[2] && request.method === "GET") {
         const row = await getDocument(env, spaceId, id);
-        return row ? json({ document: row }) : json({ error: "not found" }, 404);
+        return row ? json({ document: row, expense: await getExpense(env, id) }) : json({ error: "not found" }, 404);
       }
 
-      if (doc[2] && request.method === "PATCH") {
+      if (doc[2] === "/issuer" && request.method === "PATCH") {
+        const body = (await request.json().catch(() => null)) as { issuer?: string } | null;
+        const issuer = cleanName(body?.issuer);
+        if (!issuer) return json({ error: "issuer required (1–60 chars)" }, 400);
+        const row = await updateDocumentIssuer(env, spaceId, id, issuer);
+        if (!row) return json({ error: "not found" }, 404);
+        // Best effort: the Drive file was named before the sender was known.
+        let renamed: string | null = null;
+        if (row.drive_file_id && row.mime_type) {
+          try {
+            const owner = await spaceOwner(env, space);
+            if (owner?.google_refresh_token_enc) {
+              renamed = buildFilename({ document_date: row.document_date, issuer: row.issuer, title: row.title } as Extraction, row.mime_type, row.created_at.slice(0, 10));
+              await renameFile(await userAccessToken(env, owner), row.drive_file_id, renamed);
+              await updateDocumentFiling(env, id, { driveFileId: row.drive_file_id, filename: renamed, status: row.status as "complete" | "failed", error: row.error });
+            }
+          } catch (err) {
+            console.error(`[${rid}] rename after issuer edit failed:`, err);
+            renamed = null;
+          }
+        }
+        return json({ ok: true, id, issuer, filename: renamed });
+      }
+
+      if (doc[2] === "/retention" && request.method === "PATCH") {
         const body = (await request.json().catch(() => null)) as { retention?: string; reason?: string } | null;
         const retention = body?.retention as RetentionStatus | undefined;
         if (!retention || !(RETENTION_STATUSES as readonly string[]).includes(retention)) {
@@ -361,139 +402,240 @@ export default {
       if (!ACCEPTED_TYPES.has(mimeType)) {
         return json({ error: `unsupported type "${mimeType}"`, accepted: [...ACCEPTED_TYPES] }, 415);
       }
-
       const declared = Number(request.headers.get("Content-Length") ?? 0);
-      if (declared > MAX_BODY_BYTES) {
-        return json({ error: "body too large", max_bytes: MAX_BODY_BYTES }, 413);
-      }
-
+      if (declared > MAX_BODY_BYTES) return json({ error: "body too large", max_bytes: MAX_BODY_BYTES }, 413);
       const bytes = await request.arrayBuffer();
       if (bytes.byteLength === 0) return json({ error: "empty body" }, 400);
-      if (bytes.byteLength > MAX_BODY_BYTES) {
-        return json({ error: "body too large", max_bytes: MAX_BODY_BYTES }, 413);
-      }
-
+      if (bytes.byteLength > MAX_BODY_BYTES) return json({ error: "body too large", max_bytes: MAX_BODY_BYTES }, 413);
       const isImage = mimeType.startsWith("image/");
       if (isImage && bytes.byteLength > MAX_IMAGE_FOR_EXTRACTION) {
-        return json(
-          { error: "image too large for extraction; downscale before upload", max_bytes: MAX_IMAGE_FOR_EXTRACTION },
-          413,
-        );
+        return json({ error: "image too large for extraction; downscale before upload", max_bytes: MAX_IMAGE_FOR_EXTRACTION }, 413);
       }
 
-      // Each stage can fail independently; report which one did.
-      let stage: "ocr" | "extraction" | "index" | "filing" = "ocr";
+      const lang = requestLang(request);
+      const from = decodeURIComponent(request.headers.get("X-From") ?? "").trim().slice(0, 120) || null;
       const started = Date.now();
-      let ocrPages = 0;
-      let spaceId: string | null = null;
-      const langForLedger = requestLang(request);
-      try {
-        const result = await ocr(env, bytes, mimeType);
-        ocrPages = result.pageCount;
 
-        stage = "extraction";
-        // PDFs are not sent as images — Document AI has already flattened them.
-        const image = isImage ? { data: arrayBufferToBase64(bytes), mediaType: mimeType } : null;
-        const lang = requestLang(request);
-        const { extraction, usage, model } = await extract(env, result.text, image, lang);
-        const cost = estimateCost(model, { pages: result.pageCount, ...usage });
-        const meta = { lang, cost, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
-
-        // Index it, if there is somewhere to index it. Without DATABASE_URL the
-        // endpoint still works as a pure OCR+extract tester.
-        let id: string | null = null;
-        let filed: Filed | null = null;
-        let filingError: "reconnect_google" | "owner_no_drive" | "failed" | null = null;
-
-        if (hasDatabase(env)) {
-          stage = "index";
-          const ctx = await callerContext(env, caller);
-          const ledgerUser = ctx.user.id;
-          spaceId = ctx.space.id;
-          const filename = decodeURIComponent(request.headers.get("X-Filename") ?? "") || null;
-
-          // Files go to the SPACE OWNER's Drive with the owner's grant, whoever scanned.
-          const owner = await spaceOwner(env, ctx.space);
-          if (owner?.google_refresh_token_enc) {
-            id = await insertDocument(env, ctx.space.id, ledgerUser, filename, result, extraction, model, "filing", meta);
-            stage = "filing";
-            try {
-              filed = await fileToDrive(env, owner, ctx.space, bytes, mimeType, extraction);
-              await updateDocumentFiling(env, id, {
-                driveFileId: filed.fileId,
-                filename: filed.filename,
-                status: "complete",
-                error: null,
-              });
-            } catch (err) {
-              // The document is extracted and indexed; only the Drive copy is
-              // missing. That is a retryable state, not a lost scan.
-              console.error(`[${rid}] filing failed:`, err);
-              filingError = err instanceof ReconnectRequired ? "reconnect_google" : "failed";
-              await updateDocumentFiling(env, id, {
-                driveFileId: null,
-                filename: null,
-                status: "failed",
-                error: err instanceof Error ? err.message.slice(0, 500) : String(err),
-              });
-            }
-          } else {
-            id = await insertDocument(env, ctx.space.id, ledgerUser, filename, result, extraction, model, "complete", meta);
-            filingError = "owner_no_drive";
-          }
-
-          await recordScanCost(env, {
-            userId: ledgerUser, spaceId, documentId: id, status: "complete", stage: null, lang,
-            mimeType, bytes: bytes.byteLength, ocrPages: result.pageCount, model,
-            inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
-            cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens,
-            ocrUsd: cost.ocr_usd, llmUsd: cost.llm_usd, totalUsd: cost.total_usd,
-            pricingAsOf: cost.pricing_as_of, durationMs: Date.now() - started,
-          });
+      // Dry run (operator only): OCR + extraction, nothing stored anywhere —
+      // the prompt-tuning path (scripts/eval-extract.ts). Also the behaviour
+      // without a database. Nothing is kept, so the Drive-first rule has
+      // nothing to protect.
+      if (!hasDatabase(env) || (url.searchParams.get("dry") === "1" && caller.admin)) {
+        try {
+          const result = await ocr(env, bytes, mimeType);
+          const image = isImage ? { data: arrayBufferToBase64(bytes), mediaType: mimeType } : null;
+          const { extraction, usage, model } = await extract(env, result.text, image, lang, { from });
+          const cost = estimateCost(model, { pages: result.pageCount, ...usage });
+          return json({ id: null, dry: true, lang, cost, filed: null, filing_error: null, ocr: ocrSummary(result), extraction });
+        } catch (err) {
+          console.error(`[${rid}] dry run failed:`, err);
+          return json({ error: "processing failed", stage: "ocr_or_extraction", request_id: rid }, 502);
         }
-
-        return json({
-          id,
-          space_id: spaceId,
-          lang,
-          cost,
-          filed,
-          filing_error: filingError,
-          ocr: {
-            provider: result.provider,
-            pages: result.pageCount,
-            confidence: result.confidence,
-            chars: result.text.length,
-            text: result.text,
-          },
-          extraction,
-        });
-      } catch (err) {
-        // Upstream error bodies can carry project identifiers and quota
-        // details. Log them; do not echo them.
-        console.error(`[${rid}] process failed at ${stage}:`, err);
-        // A failure after OCR still cost money. Ledger it, best effort.
-        if (hasDatabase(env) && ocrPages > 0) {
-          try {
-            const c = estimateCost("claude-opus-5", { pages: ocrPages, inputTokens: 0, outputTokens: 0 });
-            await recordScanCost(env, {
-              userId: caller.user?.id ?? (await ensureLocalUser(env)), spaceId, documentId: null,
-              status: "failed", stage, lang: langForLedger, mimeType, bytes: bytes.byteLength,
-              ocrPages, model: null, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
-              ocrUsd: c.ocr_usd, llmUsd: 0, totalUsd: c.ocr_usd, pricingAsOf: c.pricing_as_of,
-              durationMs: Date.now() - started,
-            });
-          } catch (ledgerErr) {
-            console.error(`[${rid}] ledger write failed:`, ledgerErr);
-          }
-        }
-        return json({ error: "processing failed", stage, request_id: rid }, 502);
       }
+
+      // Hard rule (2026-09-20): the photo is in the owner's Drive before we
+      // read it. No grant, no scan — the photo is still on the phone, and
+      // nothing has been spent.
+      const ctx = await callerContext(env, caller);
+      const owner = await spaceOwner(env, ctx.space);
+      if (!owner?.google_refresh_token_enc) {
+        return json({ error: "owner_no_drive", filing_error: "owner_no_drive", stage: "filing" }, 409);
+      }
+      let staged: Staged;
+      try {
+        staged = await stageToDrive(env, owner, ctx.space, bytes, mimeType);
+      } catch (err) {
+        console.error(`[${rid}] staging to Drive failed:`, err);
+        if (err instanceof ReconnectRequired) return json({ error: "reconnect_google", filing_error: "reconnect_google", stage: "filing" }, 409);
+        return json({ error: "filing failed", stage: "filing", request_id: rid }, 502);
+      }
+      const filename = decodeURIComponent(request.headers.get("X-Filename") ?? "") || staged.filename;
+      const id = await insertStagedDocument(env, ctx.space.id, ctx.user.id, {
+        driveFileId: staged.fileId, filename: staged.filename, mimeType, bytes: bytes.byteLength, lang,
+      });
+      void filename;
+
+      try {
+        const out = await interpret(env, {
+          id, spaceId: ctx.space.id, userId: ctx.user.id, bytes, mimeType, ocrText: null, lang, from,
+          trigger: "ingest", started, rid,
+          finish: (x) => finishFiling(staged, ctx.space, mimeType, x),
+        });
+        return json({ id, space_id: ctx.space.id, lang, cost: out.cost, filed: out.filed, filing_error: null, ocr: out.ocr, extraction: out.extraction });
+      } catch (err) {
+        const stage = err instanceof InterpretError ? err.stage : "extraction";
+        // The photo is filed and the row exists; the interpretation can be
+        // re-run later (Re-analyze), so this is a degraded document, not a lost scan.
+        return json({
+          error: "processing failed", stage, request_id: rid, id, space_id: ctx.space.id,
+          filed: { fileId: staged.fileId, filename: staged.filename, link: staged.link, path: staged.path },
+        }, 502);
+      }
+    }
+
+    const re = path.match(/^\/api\/documents\/([0-9a-f-]{36})\/reanalyze$/);
+    if (re && request.method === "POST") {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      const { space } = await callerContext(env, caller);
+      const id = re[1];
+      // Admins may re-analyse across archives (bulk re-enrichment); members only their current one.
+      const doc = await getDocument(env, caller.admin ? null : space.id, id);
+      if (!doc) return json({ error: "not found" }, 404);
+      const docSpace = doc.space_id === space.id ? space : await getSpaceById(env, doc.space_id);
+      if (!docSpace) return json({ error: "not found" }, 404);
+
+      // The original comes back from the owner's Drive. If that is impossible
+      // (grant lapsed, file gone) the stored OCR text still allows a text-only run.
+      let bytes: ArrayBuffer | null = null;
+      let mimeType = doc.mime_type ?? "application/octet-stream";
+      if (doc.drive_file_id) {
+        try {
+          const owner = await spaceOwner(env, docSpace);
+          if (owner?.google_refresh_token_enc) {
+            const dl = await downloadFile(await userAccessToken(env, owner), doc.drive_file_id);
+            if (dl) { bytes = dl.bytes; mimeType = dl.mimeType; }
+          }
+        } catch (err) {
+          console.error(`[${rid}] reanalyze: could not fetch original:`, err);
+        }
+      }
+      if (!bytes && !doc.ocr_text) return json({ error: "nothing to analyse: no file and no OCR text" }, 409);
+      const lang = requestLang(request);
+      const from = decodeURIComponent(request.headers.get("X-From") ?? "").trim().slice(0, 120) || null;
+      try {
+        const out = await interpret(env, {
+          id, spaceId: doc.space_id, userId: caller.user?.id ?? (await ensureLocalUser(env)), bytes, mimeType,
+          ocrText: doc.ocr_text, lang, from, trigger: "reanalyze", started: Date.now(), rid,
+        });
+        return json({ id, cost: out.cost, with_image: out.withImage, document: await getDocument(env, null, id), expense: await getExpense(env, id) });
+      } catch (err) {
+        const stage = err instanceof InterpretError ? err.stage : "extraction";
+        return json({ error: "re-analysis failed", stage, request_id: rid }, 502);
+      }
+    }
+
+    if (path === "/api/issuers") {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      const { space } = await callerContext(env, caller);
+      return json({ issuers: await listIssuers(env, space.id) });
+    }
+
+    if (path === "/api/spending") {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      const { space } = await callerContext(env, caller);
+      const month = /^\d{4}-\d{2}$/.test(url.searchParams.get("month") ?? "") ? url.searchParams.get("month")! : new Date().toISOString().slice(0, 7);
+      return json(await spendingSummary(env, space.id, month));
+    }
+
+    if (path === "/api/expense-items") {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      const { space } = await callerContext(env, caller);
+      const month = url.searchParams.get("month") ?? undefined;
+      if (month && !/^\d{4}-\d{2}$/.test(month)) return json({ error: "month must be YYYY-MM" }, 400);
+      const category = url.searchParams.get("category") ?? undefined;
+      if (category && !(ITEM_CATEGORIES as readonly string[]).includes(category)) return json({ error: "unknown category", allowed: ITEM_CATEGORIES }, 400);
+      return json({ items: await listExpenseItems(env, space.id, { month, category, query: url.searchParams.get("q")?.slice(0, 100) || undefined }) });
+    }
+
+    if (path === "/api/admin/stale") {
+      if (!caller.admin) return json({ error: "forbidden" }, 403);
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") ?? 50) || 50));
+      return json({ current_version: EXTRACTION_VERSION, documents: await listStale(env, null, limit) });
     }
 
     return json({ error: "not found" }, 404);
   },
 } satisfies ExportedHandler<Env>;
+
+class InterpretError extends Error {
+  stage: "ocr" | "extraction" | "index" | "filing";
+  constructor(stage: "ocr" | "extraction" | "index" | "filing", cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.stage = stage;
+  }
+}
+
+const ocrSummary = (r: OcrResult) => ({ provider: r.provider, pages: r.pageCount, confidence: r.confidence, chars: r.text.length, text: r.text });
+
+/**
+ * The read-and-understand half of the pipeline, shared by ingest and
+ * re-analysis: OCR (unless the text is already stored) → Claude → apply to the
+ * row → optional filing step → ledger. Every attempt is ledgered, success or
+ * not, because OCR was paid for either way.
+ */
+async function interpret(
+  env: Env,
+  p: {
+    id: string; spaceId: string; userId: string;
+    bytes: ArrayBuffer | null; mimeType: string; ocrText: string | null;
+    lang: Lang; from: string | null; trigger: "ingest" | "reanalyze"; started: number; rid: string;
+    finish?: (x: Extraction) => Promise<Filed>;
+  },
+): Promise<{ extraction: Extraction; cost: Cost; ocr: ReturnType<typeof ocrSummary> | null; filed: Filed | null; withImage: boolean }> {
+  let stage: "ocr" | "extraction" | "index" | "filing" = "ocr";
+  let ocrPages = 0;
+  const isImage = p.mimeType.startsWith("image/");
+  const withImage = Boolean(p.bytes && isImage && p.bytes.byteLength <= MAX_IMAGE_FOR_EXTRACTION);
+  try {
+    let result: OcrResult | null = null;
+    let text = p.ocrText;
+    if (!text) {
+      if (!p.bytes) throw new Error("no bytes to OCR");
+      result = await ocr(env, p.bytes, p.mimeType);
+      ocrPages = result.pageCount;
+      text = result.text;
+      await setDocumentOcr(env, p.id, result);
+    }
+
+    stage = "extraction";
+    const image = withImage ? { data: arrayBufferToBase64(p.bytes!), mediaType: p.mimeType } : null;
+    const { extraction, usage, model } = await extract(env, text, image, p.lang, { from: p.from });
+    const cost = estimateCost(model, { pages: ocrPages, ...usage });
+
+    stage = "index";
+    await applyExtraction(env, p.id, p.spaceId, extraction, model, { lang: p.lang, cost, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }, p.trigger, withImage);
+
+    let filed: Filed | null = null;
+    if (p.finish) {
+      stage = "filing";
+      try {
+        filed = await p.finish(extraction);
+        await updateDocumentFiling(env, p.id, { driveFileId: filed.fileId, filename: filed.filename, status: "complete", error: null });
+      } catch (err) {
+        // The file is in Drive under its provisional name; only the rename failed.
+        console.error(`[${p.rid}] rename after extraction failed:`, err);
+      }
+    }
+
+    await recordScanCost(env, {
+      userId: p.userId, spaceId: p.spaceId, documentId: p.id, status: "complete", stage: null, lang: p.lang,
+      mimeType: p.mimeType, bytes: p.bytes?.byteLength ?? 0, ocrPages, model,
+      inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
+      cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens,
+      ocrUsd: cost.ocr_usd, llmUsd: cost.llm_usd, totalUsd: cost.total_usd,
+      pricingAsOf: cost.pricing_as_of, durationMs: Date.now() - p.started, kind: p.trigger,
+    });
+    return { extraction, cost, ocr: result ? ocrSummary(result) : null, filed, withImage };
+  } catch (err) {
+    // Upstream error bodies can carry project identifiers and quota details. Log; do not echo.
+    console.error(`[${p.rid}] ${p.trigger} failed at ${stage}:`, err);
+    try {
+      if (p.trigger === "ingest") await markDocumentFailed(env, p.id, `${stage}: ${err instanceof Error ? err.message : String(err)}`);
+      const c = estimateCost(EXTRACTION_MODEL, { pages: ocrPages, inputTokens: 0, outputTokens: 0 });
+      await recordScanCost(env, {
+        userId: p.userId, spaceId: p.spaceId, documentId: p.id, status: "failed", stage, lang: p.lang,
+        mimeType: p.mimeType, bytes: p.bytes?.byteLength ?? 0, ocrPages, model: null,
+        inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
+        ocrUsd: c.ocr_usd, llmUsd: 0, totalUsd: c.ocr_usd, pricingAsOf: c.pricing_as_of,
+        durationMs: Date.now() - p.started, kind: p.trigger,
+      });
+    } catch (ledgerErr) {
+      console.error(`[${p.rid}] ledger write failed:`, ledgerErr);
+    }
+    throw new InterpretError(stage, err);
+  }
+}
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {
   const arr = new Uint8Array(buf);

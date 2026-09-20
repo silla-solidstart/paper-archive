@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 
 import { buildFilename } from "../src/filing.ts";
 import { escapeLike } from "../src/db.ts";
-import { ExtractionSchema, RETENTION_STATUSES, DOCUMENT_TYPES } from "../src/extract.ts";
+import { ExtractionSchema, ExpenseSchema, EXTRACTION_VERSION, HANDLING, ITEM_CATEGORIES, RETENTION_STATUSES, DOCUMENT_TYPES } from "../src/extract.ts";
 import { base64url, pemToPkcs8 } from "../src/google-auth.ts";
 import { sign, verify, encrypt, decrypt, readSession, createSessionCookie } from "../src/session.ts";
 import { isRetryable, UpstreamError, withRetry } from "../src/retry.ts";
@@ -35,7 +35,40 @@ const sample = {
   due_date: null,
   reference_number: null,
   other_fields: [{ key: "年度", value: "令和8年度" }],
+  // v2
+  source_lang: "ja",
+  handling: ["todo", "expense", "record"],
+  issuer_key: "上越市",
+  keywords: ["固定資産税", "property tax", "上越市", "Joetsu"],
+  tables: [{ title: "納期", columns: ["期", "納期限", "金額"], rows: [["第1期", "令和8年6月30日", "32,100"], ["第2期", "令和8年9月30日", "32,100"]] }],
+  expense: {
+    merchant: "上越市", merchant_key: "上越市", spent_on: "2026-09-30", total: 128400, tax: null, currency: "JPY",
+    payment_method: null, expense_kind: "tax", items: [],
+  },
 };
+
+const receipt = {
+  merchant: "イオン上越店", merchant_key: "イオン", spent_on: "2026-08-14", total: 1284, tax: 95, currency: "JPY",
+  payment_method: "card", expense_kind: "groceries",
+  items: [
+    { name: "ポテトチップス うすしお", quantity: 2, unit_price: 128, amount: 256, category: "snacks" },
+    { name: "牛乳 1L", quantity: 1, unit_price: 218, amount: 218, category: "groceries" },
+    { name: "ﾃｨｯｼｭ 5箱", quantity: null, unit_price: null, amount: 398, category: "household" },
+  ],
+};
+
+test("extraction v2: handling, keywords and an itemised expense parse; unknown codes are rejected", () => {
+  assert.equal(EXTRACTION_VERSION, 2);
+  assert.ok(ExtractionSchema.safeParse({ ...sample, expense: receipt, handling: ["expense"] }).success);
+  assert.ok(ExpenseSchema.safeParse(receipt).success);
+  assert.equal(ExpenseSchema.safeParse({ ...receipt, items: [{ ...receipt.items[0], category: "junk food" }] }).success, false);
+  assert.equal(ExtractionSchema.safeParse({ ...sample, handling: ["urgent"] }).success, false);
+  assert.equal(ExtractionSchema.safeParse({ ...sample, keywords: new Array(11).fill("x") }).success, false);
+  assert.ok((HANDLING as readonly string[]).includes("noise"));
+  assert.ok((ITEM_CATEGORIES as readonly string[]).includes("snacks"));
+  // A non-expense document carries no expense block.
+  assert.ok(ExtractionSchema.safeParse({ ...sample, handling: ["notice"], expense: null }).success);
+});
 
 test("filename: date_issuer_title with unsafe characters stripped", () => {
   const x = ExtractionSchema.parse({ ...sample, title: "請求書: 9/2026 <draft>" });
