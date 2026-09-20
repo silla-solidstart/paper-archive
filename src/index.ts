@@ -19,11 +19,13 @@ import {
   listIssuers,
   listRecent,
   listStale,
+  listUnprocessed,
   markDocumentFailed,
   pingDatabase,
   recordScanCost,
   searchDocuments,
   setDocumentOcr,
+  setDocumentStatus,
   setDocumentStorage,
   spendingSummary,
   updateDocumentFiling,
@@ -57,8 +59,10 @@ import {
  *
  *   GET  /auth/login | /auth/callback | /auth/logout
  *   GET  /api/me        current user (session only)
- *   POST /api/process   store original (R2, first) → OCR → extraction → index → name
- *                       ?dry=1 (operator): OCR + extraction only, nothing stored
+ *   POST /api/process   store original (R2) → 202 {id, status: pending}; the reading
+ *                       (OCR → extraction → index → name) continues in the background.
+ *                       ?sync=1 waits and returns the reading; ?dry=1 (operator) reads
+ *                       without storing anything. Poll GET /api/documents/:id (status).
  *   GET  /api/documents/:id/file        the original (session/bearer; space members)
  *   POST /api/documents/:id/link        short-lived signed URL /f/:id?t= for cookie-less readers
  *   POST /api/documents/:id/reanalyze   re-run extraction (original from R2) — versioned, ledgered
@@ -147,11 +151,11 @@ async function resolveCaller(request: Request, env: Env): Promise<Caller | Respo
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     // Correlates a client-visible failure with the server log line.
     const rid = crypto.randomUUID().slice(0, 8);
     try {
-      return await handle(request, env, rid);
+      return await handle(request, env, ctx, rid);
     } catch (err) {
       // Anything uncaught would surface as Cloudflare's bare "error code: 1101"
       // page. Log it with the id and answer JSON the client can show.
@@ -159,9 +163,42 @@ export default {
       return json({ error: "internal error", request_id: rid }, 500);
     }
   },
+
+  // Catch-up (wrangler.toml [triggers]): a reading that ran in the background
+  // after the upload response can be cut off (device suspended, isolate
+  // evicted). Anything still unread a couple of minutes after upload is
+  // picked up here, one at a time so a slow one cannot starve the rest.
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (!hasDatabase(env)) return;
+    const rid = "cron-" + crypto.randomUUID().slice(0, 6);
+    const stuck = await listUnprocessed(env, 3);
+    for (const d of stuck) {
+      ctx.waitUntil(readDocument(env, d.id, rid).catch((err) => console.error(`[${rid}] catch-up failed for ${d.id}:`, err)));
+    }
+  },
 } satisfies ExportedHandler<Env>;
 
-async function handle(request: Request, env: Env, rid: string): Promise<Response> {
+/** Reads a stored-but-unread document: original from R2, OCR, understand, name. */
+async function readDocument(env: Env, id: string, rid: string): Promise<void> {
+  const doc = await getDocument(env, null, id);
+  if (!doc || !doc.storage_key || !READABLE.has(doc.status)) return;
+  const obj = await getOriginal(env, doc.storage_key);
+  if (!obj) { await markDocumentFailed(env, id, "original missing from storage"); return; }
+  const mimeType = doc.mime_type ?? obj.mimeType;
+  await interpret(env, {
+    id, spaceId: doc.space_id, userId: doc.user_id, bytes: await obj.bytes(), mimeType, ocrText: doc.ocr_text,
+    lang: (doc.lang === "ja" ? "ja" : "en"), from: null, trigger: "ingest", started: Date.now(), rid,
+    finish: async (x) => {
+      const filename = buildFilename(x, mimeType, doc.created_at.slice(0, 10));
+      await updateDocumentFiling(env, id, { filename, status: "complete", error: null });
+      return { filename, url: `/api/documents/${id}/file` };
+    },
+  });
+}
+// Statuses a document can be picked up in: never read, or read cut off mid-way.
+const READABLE = new Set(["pending", "ocr", "extracting"]);
+
+async function handle(request: Request, env: Env, ctx: ExecutionContext, rid: string): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -436,10 +473,10 @@ async function handle(request: Request, env: Env, rid: string): Promise<Response
       // Hard rule (2026-09-20): the photo is stored before we read it. The
       // row exists first so the object key is its id; if the put fails the
       // row is discarded and nothing has been spent.
-      const ctx = await callerContext(env, caller);
+      const caller_ = await callerContext(env, caller);
       const provisional = `${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z")}.${extensionFor(mimeType)}`;
-      const id = await insertStagedDocument(env, ctx.space.id, ctx.user.id, { filename: provisional, mimeType, bytes: bytes.byteLength, lang });
-      const key = originalKey(ctx.space.id, id, mimeType);
+      const id = await insertStagedDocument(env, caller_.space.id, caller_.user.id, { filename: provisional, mimeType, bytes: bytes.byteLength, lang });
+      const key = originalKey(caller_.space.id, id, mimeType);
       try {
         await putOriginal(env, key, bytes, mimeType, provisional);
         await setDocumentStorage(env, id, key);
@@ -449,23 +486,32 @@ async function handle(request: Request, env: Env, rid: string): Promise<Response
         return json({ error: "storage failed", stage: "storage", request_id: rid }, 502);
       }
 
-      try {
-        const out = await interpret(env, {
-          id, spaceId: ctx.space.id, userId: ctx.user.id, bytes, mimeType, ocrText: null, lang, from,
-          trigger: "ingest", started, rid,
-          finish: async (x) => {
-            const filename = buildFilename(x, mimeType, new Date().toISOString().slice(0, 10));
-            await updateDocumentFiling(env, id, { filename, status: "complete", error: null });
-            return { filename, url: `/api/documents/${id}/file` };
-          },
-        });
-        return json({ id, space_id: ctx.space.id, lang, cost: out.cost, filed: out.filed, ocr: out.ocr, extraction: out.extraction });
-      } catch (err) {
-        const stage = err instanceof InterpretError ? err.stage : "extraction";
-        // The photo is stored and the row exists; the interpretation can be
-        // re-run later (Re-analyze), so this is a degraded document, not a lost scan.
-        return json({ error: "processing failed", stage, request_id: rid, id, space_id: ctx.space.id, filed: { filename: provisional, url: `/api/documents/${id}/file` } }, 502);
+      const reading = interpret(env, {
+        id, spaceId: caller_.space.id, userId: caller_.user.id, bytes, mimeType, ocrText: null, lang, from,
+        trigger: "ingest", started, rid,
+        finish: async (x) => {
+          const filename = buildFilename(x, mimeType, new Date().toISOString().slice(0, 10));
+          await updateDocumentFiling(env, id, { filename, status: "complete", error: null });
+          return { filename, url: `/api/documents/${id}/file` };
+        },
+      });
+      const filed = { filename: provisional, url: `/api/documents/${id}/file` };
+
+      // ?sync=1 (scripts, tests): wait for the reading and return it all.
+      if (url.searchParams.get("sync") === "1") {
+        try {
+          const out = await reading;
+          return json({ id, space_id: caller_.space.id, lang, status: "complete", cost: out.cost, filed: out.filed, ocr: out.ocr, extraction: out.extraction });
+        } catch (err) {
+          const stage = err instanceof InterpretError ? err.stage : "extraction";
+          return json({ error: "processing failed", stage, request_id: rid, id, space_id: caller_.space.id, filed }, 502);
+        }
       }
+
+      // The photo is safe; the user need not wait for the reading. It carries
+      // on after this response (and the cron catch-up covers a cut-off run).
+      ctx.waitUntil(reading.catch((err) => console.error(`[${rid}] background reading failed:`, err)));
+      return json({ id, space_id: caller_.space.id, lang, status: "pending", filed }, 202);
     }
 
     // The original itself. Session or bearer; a member of the document's
@@ -515,10 +561,16 @@ async function handle(request: Request, env: Env, rid: string): Promise<Response
       if (!bytes && !doc.ocr_text) return json({ error: "nothing to analyse: no file and no OCR text" }, 409);
       const lang = requestLang(request);
       const from = decodeURIComponent(request.headers.get("X-From") ?? "").trim().slice(0, 120) || null;
+      const unread = READABLE.has(doc.status);
       try {
         const out = await interpret(env, {
           id, spaceId: doc.space_id, userId: caller.user?.id ?? (await ensureLocalUser(env)), bytes, mimeType,
-          ocrText: doc.ocr_text, lang, from, trigger: "reanalyze", started: Date.now(), rid,
+          ocrText: doc.ocr_text, lang, from, trigger: unread ? "ingest" : "reanalyze", started: Date.now(), rid,
+          finish: unread ? async (x) => {
+            const filename = buildFilename(x, mimeType, doc.created_at.slice(0, 10));
+            await updateDocumentFiling(env, id, { filename, status: "complete", error: null });
+            return { filename, url: `/api/documents/${id}/file` };
+          } : undefined,
         });
         return json({ id, cost: out.cost, with_image: out.withImage, document: await getDocument(env, null, id), expense: await getExpense(env, id) });
       } catch (err) {
@@ -613,6 +665,7 @@ async function interpret(
   try {
     let result: OcrResult | null = null;
     let text = p.ocrText;
+    if (p.trigger === "ingest") await setDocumentStatus(env, p.id, "ocr");
     if (!text) {
       if (!p.bytes) throw new Error("no bytes to OCR");
       result = await ocr(env, p.bytes, p.mimeType);
@@ -622,6 +675,7 @@ async function interpret(
     }
 
     stage = "extraction";
+    if (p.trigger === "ingest") await setDocumentStatus(env, p.id, "extracting");
     const image = withImage ? { data: arrayBufferToBase64(p.bytes!), mediaType: p.mimeType } : null;
     const { extraction, usage, model } = await extract(env, text, image, p.lang, { from: p.from });
     const cost = estimateCost(model, { pages: ocrPages, ...usage });

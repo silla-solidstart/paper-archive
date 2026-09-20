@@ -8,6 +8,10 @@ compatibility_flags = ["nodejs_compat"]
 pattern = "pa.solidstart.jp"
 custom_domain = true
 
+# Catch-up for readings cut off after the upload response (see index.ts scheduled()).
+[triggers]
+crons = ["*/2 * * * *"]
+
 # Originals: one object per document, written before OCR (CLAUDE.md § Originals).
 # Create once: npx wrangler r2 bucket create paper-archive-originals --location apac
 [[r2_buckets]]

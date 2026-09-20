@@ -204,3 +204,8 @@ button.link:hover { color: var(--fg); }
 
 .ioshint { display: inline-flex; align-items: center; gap: 8px; margin-top: 28px; padding: 8px 8px 8px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; color: var(--muted); text-align: left; }
 .ioshint svg { width: 1.1em; height: 1.1em; flex: none; }
+
+.card.saved h3 { display: flex; align-items: center; gap: 8px; }
+.card.saved h3 svg, #readState svg { width: 1.1em; height: 1.1em; }
+#readState svg { animation: spin 1.2s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

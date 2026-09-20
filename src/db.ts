@@ -259,6 +259,20 @@ export async function insertStagedDocument(
   return (rows as Array<{ id: string }>)[0].id;
 }
 
+export async function setDocumentStatus(env: Env, id: string, status: "ocr" | "extracting"): Promise<void> {
+  await sql(env).query(`UPDATE documents SET status = $2 WHERE id = $1`, [id, status]);
+}
+
+/** Stored but not (fully) read: never started, or cut off mid-way more than a couple of minutes ago. */
+export async function listUnprocessed(env: Env, limit = 3): Promise<Array<{ id: string }>> {
+  return (await sql(env).query(
+    `SELECT id FROM documents
+     WHERE storage_key IS NOT NULL AND status IN ('pending', 'ocr', 'extracting')
+       AND updated_at < now() - interval '2 minutes'
+     ORDER BY created_at LIMIT $1`, [limit],
+  )) as Array<{ id: string }>;
+}
+
 export async function setDocumentStorage(env: Env, id: string, storageKey: string): Promise<void> {
   await sql(env).query(`UPDATE documents SET storage_key = $2 WHERE id = $1`, [id, storageKey]);
 }

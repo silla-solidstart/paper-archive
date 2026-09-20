@@ -52,7 +52,7 @@ for (const f of files) {
   const started = Date.now();
   try {
     // dry=1: OCR + extraction only; nothing is indexed or filed (operator path).
-    const res = await fetch(`${BASE}/api/process?dry=1`, {
+    const res = await fetch(`${BASE}/api/process?dry=1&sync=1`, {
       method: "POST",
       headers: { Authorization: auth, "Content-Type": mime, "X-Filename": encodeURIComponent(f) },
       body,

@@ -56,6 +56,8 @@ const STR = {
     failed: "Failed", need_auth: "Sign in, or paste an API token below.",
     dry_hint: "Test run — nothing was saved.", view_photo: "View photo", photo_missing: "Photo not found.",
     ios_hint: "Add to your Home Screen: Share → Add to Home Screen", dismiss: "Dismiss",
+    saved: "Saved", reading_now: "Reading it now…", leave_ok: "You can leave this screen. It will show up in Papers when it's done.",
+    pill_reading: "reading…", reading_doc: "Still reading this document…", uploading: "Uploading…",
     retention: { digital_sufficient: "◎ Digital copy likely sufficient", keep_temporarily: "◍ Keep temporarily", keep_original: "◑ Keep original", unsure: "⚠ Unsure — your call" },
     decide: { digital_sufficient: "Digital is enough", keep_temporarily: "Keep for now", keep_original: "Keep original" },
     action_required: "Action required", action: { payment: "payment", appointment: "appointment", renewal: "renewal", signature: "signature", response: "response", cancellation: "cancellation" },
@@ -119,6 +121,8 @@ const STR = {
     failed: "失敗", need_auth: "ログインするか、下にAPIトークンを入力してください。",
     dry_hint: "テスト実行のため保存していません。", view_photo: "写真を見る", photo_missing: "写真が見つかりません。",
     ios_hint: "ホーム画面に追加できます：共有 → ホーム画面に追加", dismiss: "閉じる",
+    saved: "保存しました", reading_now: "読み取り中です", leave_ok: "この画面を離れても大丈夫です。読み取りが終わると「書類」に表示されます。",
+    pill_reading: "読み取り中", reading_doc: "読み取り中です。終わると自動で表示されます。", uploading: "アップロード中",
     retention: { digital_sufficient: "◎ デジタルで十分", keep_temporarily: "◍ しばらく保管", keep_original: "◑ 原本を保管", unsure: "⚠ 判断が必要" },
     decide: { digital_sufficient: "デジタルで十分", keep_temporarily: "しばらく保管", keep_original: "原本を保管" },
     action_required: "要対応", action: { payment: "支払い", appointment: "予約", renewal: "更新", signature: "署名", response: "回答", cancellation: "解約" },
@@ -378,16 +382,31 @@ async function process(file) {
   try {
     status.textContent = t("preparing");
     const { blob, type } = await downscale(file);
-    status.textContent = t("reading", (blob.size / 1024).toFixed(0));
+    status.textContent = t("uploading");
     const data = await api("/api/process", {
       method: "POST",
       headers: { "Content-Type": type, "X-Filename": encodeURIComponent(file.name || "scan") },
       body: blob,
     });
     status.textContent = "";
-    state.lastResult = data;
     result.innerHTML = "";
-    result.appendChild(resultCard(data));
+    if (data.status === "pending") {
+      // Stored. The reading continues on the server; show it if we are still here when it lands.
+      const card = document.createElement("div");
+      card.className = "card saved";
+      card.innerHTML = `<h3>${icon("circle-check")} ${t("saved")}</h3><div class="meta" id="readState">${icon("refresh-cw")} ${t("reading_now")}</div><div class="meta">${t("leave_ok")}</div>
+        <div class="decide"><a href="#/doc/${esc(data.id)}"><button>${t("open")}</button></a></div>`;
+      result.appendChild(card);
+      state.lastResult = null;
+      watchReading(data.id, (doc) => {
+        if (!card.isConnected) return;
+        if (doc.status === "complete") { card.replaceWith(readCard(doc)); }
+        else if (doc.status === "failed") { $("#readState", card).innerHTML = t("filed_pending"); }
+      });
+    } else {
+      state.lastResult = data;
+      result.appendChild(resultCard(data));
+    }
   } catch (err) {
     const b = err.body || {};
     if (b.id) status.innerHTML = `${t("filed_pending")} <a href="#/doc/${esc(b.id)}">${t("open")}</a>`;
@@ -448,6 +467,12 @@ async function docView(id) {
   let d, expense;
   try { ({ document: d, expense } = await api(`/api/documents/${id}`)); }
   catch (err) { view.innerHTML = `<div class="empty">${err.status === 404 ? t("not_found") : esc(err.message)}</div>`; return; }
+  if (READING.has(d.status)) {
+    view.innerHTML = `<div class="card"><h3>${icon("refresh-cw")} ${t("reading_now")}</h3><div class="meta">${t("reading_doc")}</div>${photoBlock(d.id, Boolean(d.storage_key))}
+      <div class="footer-actions"><a href="#/archive" class="meta">${t("back_archive")}</a></div></div>`;
+    watchReading(id, () => docView(id));
+    return;
+  }
 
   const x = d.extracted_data || {};
   const F = t("fields");
@@ -806,7 +831,7 @@ function listCard(d) {
       <span class="meta">${esc(meta)}</span>
       ${due ? `<span class="pill ${due.cls}">${esc(d.action_type ? tt("action", d.action_type) : t("action_required"))}${due.text ? " · " + due.text : ""}</span>` : ""}
       ${d.retention === "unsure" ? `<span class="pill warn">${t("pill_review")}</span>` : ""}
-      ${d.status === "failed" ? `<span class="pill">${t("pill_failed")}</span>` : ""}
+      ${d.status === "failed" ? `<span class="pill">${t("pill_failed")}</span>` : READING.has(d.status) ? `<span class="pill">${t("pill_reading")}</span>` : ""}
       ${Array.isArray(d.handling) && d.handling.includes("expense") ? `<span class="pill">${tt("handling", "expense")}</span>` : ""}
       ${jpy != null ? `<span class="pill">${t("cost_short", jpy)}</span>` : ""}
     </div>`;
@@ -843,6 +868,37 @@ const fmtMoney = (n, cur = "JPY") => {
   if (!Number.isFinite(v)) return "";
   return cur === "JPY" || !cur ? `¥${Math.round(v).toLocaleString()}` : `${cur} ${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 };
+
+const READING = new Set(["pending", "ocr", "extracting"]);
+/** Polls one document until it is read (or fails). Stops when the caller's view is gone. */
+function watchReading(id, onChange) {
+  let tries = 0;
+  const tick = async () => {
+    if (location.hash !== "#/" && !location.hash.startsWith(`#/doc/${id}`)) return;
+    try {
+      const { document: d, expense } = await api(`/api/documents/${id}`);
+      if (!READING.has(d.status)) { onChange(d, expense); return; }
+    } catch { return; }
+    if (++tries < 60) setTimeout(tick, tries < 10 ? 3000 : 6000);
+  };
+  setTimeout(tick, 3000);
+}
+/** A finished reading, shown on the camera screen in place of the "saved" card. */
+function readCard(d) {
+  const el = document.createElement("div");
+  el.className = "card";
+  el.innerHTML = `<h3>${esc(d.title)}</h3>
+    <div class="meta">${esc([tt("doctype", d.document_type), d.issuer, d.document_date].filter(Boolean).join(" · "))}</div>
+    <div class="meta">${esc(d.summary || "")}</div>
+    ${handlingPills(d.handling)}
+    ${actionLine(d)}
+    <div class="keep" id="keep">${retentionLabel(d.retention)} <span class="meta">— ${esc(d.retention_reason || "")}</span></div>
+    ${decideButtons(d.id)}
+    <div id="sender">${senderBlock(d)}</div>
+    <div class="decide"><a href="#/doc/${esc(d.id)}"><button>${t("open")}</button></a></div>`;
+  wireDecide(el, d.id); wireSender(el, d);
+  return el;
+}
 
 /** iPhone Safari cannot prompt to install a web app; the one-line hint says where the menu is. */
 function iosHint() {
