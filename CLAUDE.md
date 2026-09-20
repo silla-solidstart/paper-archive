@@ -79,8 +79,12 @@ token remains the operator identity (MCP, tests) and is admin.
 ## Spaces (decided 2026-09-20)
 
 A **space** is the unit of sharing; every document belongs to exactly one.
-Users belong to any number and have a current one (`users.current_space_id`);
-all reads and writes scope by `space_id`. `documents.user_id` means "scanned by".
+**Product model (2026-09-20): every user has exactly one archive of their own,
+can share it (invite link/QR), and can be in archives others shared with
+them. Users cannot create additional spaces** — the API allows it only for
+the operator/admin, and the UI never offers it; the UI says "archive", not
+"space". Users have a current one (`users.current_space_id`); all reads and
+writes scope by `space_id`. `documents.user_id` means "scanned by".
 
 **Files live in the space owner's Google Drive**, under
 `Paper Archive / <space name> / YYYY / MM /`, uploaded with the owner's grant

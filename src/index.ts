@@ -213,6 +213,9 @@ export default {
         return json({ current: current.id, spaces: await listSpaces(env, user.id) });
       }
       if (path === "/api/spaces" && request.method === "POST") {
+        // Product decision (2026-09-20): everyone has exactly one archive of their own and can
+        // share it or join others'. Extra spaces are operator-only, to keep the model clear.
+        if (!caller.admin) return json({ error: "creating spaces is not enabled" }, 403);
         const body = (await request.json().catch(() => null)) as { name?: unknown } | null;
         const name = cleanName(body?.name);
         if (!name) return json({ error: "name required (1-60 chars)" }, 400);

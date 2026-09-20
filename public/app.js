@@ -15,7 +15,8 @@ const MAX_EDGE = 2200;
 const JPEG_QUALITY = 0.85;
 
 const $ = (sel, el = document) => el.querySelector(sel);
-const view = $("#view"), who = $("#who"), fileInput = $("#file"), langBtn = $("#lang"), spaceBtn = $("#space"), shareBtn = $("#shareBtn"), adminBtn = $("#adminBtn");
+const view = $("#view"), who = $("#who"), fileInput = $("#file"), langBtn = $("#lang"), spaceBtn = $("#space"), shareBtn = $("#shareBtn"), adminBtn = $("#adminBtn"),
+      menuBtn = $("#menuBtn"), menu = $("#menu"), signoutEl = $("#signout");
 
 // Google's standard sign-in button: four-colour G, Roboto, one language per button (spec in src/google-button.ts).
 const GOOGLE_G = `<svg class="gsi-g" viewBox="0 0 48 48" aria-hidden="true">
@@ -72,16 +73,19 @@ const STR = {
     doctype: { tax_notice: "Tax notice", government_notice: "Government notice", utility_bill: "Utility bill", insurance: "Insurance", bank_statement: "Bank statement", invoice: "Invoice", receipt: "Receipt", school_letter: "School letter", medical: "Medical", contract: "Contract", subscription: "Subscription", advertisement: "Advertisement", other: "Other" },
     lang_name: { en: "English", ja: "日本語" },
     // spaces
-    spaces: "Spaces", space: "Space", your_spaces: "Your spaces", current: "current", owner: "owner", member: "member",
-    members_n: (n) => `${n} member${n === 1 ? "" : "s"}`, new_space: "New space", space_name_ph: "Space name, e.g. Family, 田中家, Office",
-    create: "Create", settings: "Settings", rename: "Rename", save: "Save", members: "Members", remove: "Remove", leave: "Leave space",
-    confirm_leave: "Leave this space? You will no longer see its documents.", confirm_remove: (n) => `Remove ${n} from this space?`,
-    invites: "Invite people", invite_hint: "Anyone with the link can join within 7 days (up to 10 people). They sign in with Google to accept.",
+    spaces: "Archives", space: "Archive", your_archive: "Your archive", shared_with_you: "Shared with you", current: "default", owner: "yours", member: "shared",
+    members_n: (n) => `${n} ${n === 1 ? "person" : "people"}`,
+    archives_hint: "You have one archive of your own. If someone shares theirs with you, you can make it your default and switch back any time. Scans go into your default archive — yours is stored in your Google Drive, a shared one in its owner's.",
+    no_shared: "Nobody has shared an archive with you yet.",
+    settings: "Settings", rename: "Rename", save: "Save", members: "People", remove: "Remove", leave: "Leave this archive",
+    confirm_leave: "Leave this archive? You will no longer see its documents.", confirm_remove: (n) => `Remove ${n} from this archive?`,
+    shared_by: (n) => `Shared by ${n}`,
+    invites: "Share this archive", invite_hint: "Show the QR or send the link. It works for 7 days, up to 10 people; they sign in with Google and see everything in this archive.",
     create_invite: "Create invite link", copy: "Copy link", copied: "Copied", revoke: "Revoke", expires: (d) => `expires ${d}`, uses: (u, m) => `${u}/${m} used`,
     where_files_go: (name) => `Files scanned into this space are stored in the space owner's Google Drive, under Paper Archive / ${name}.`,
     join_title: "Join a space", join_desc: (space, by) => `You've been invited to <b>${esc(space)}</b>${by ? ` by ${esc(by)}` : ""}.`,
     join: "Join", joined: (name) => `You're in ${name}.`, invite_invalid: "This invite link is invalid.", invite_expired: "This invite link has expired or was used up.",
-    switch_to: "Switch",
+    switch_to: "Make default",
     share: "Share", share_app: "Share the app", share_app_hint: "Scan it. Know it. Let it go. Print this and put it where the mail lands.",
     share_space: (n) => `Invite to ${n}`, share_space_hint: "Scan to join this space. The link works for 7 days, up to 10 people; they sign in with Google.",
     share_native: "Share…", print: "Print", open_link: "Open",
@@ -121,16 +125,19 @@ const STR = {
     fields: { type: "種類", issuer: "発行元", date: "日付", amount: "金額", due: "期限", reference: "番号", categories: "分類", status: "状態", model: "モデル", ocr: "OCR", lang: "解釈の言語", cost: "費用", scanned_by: "スキャン者" },
     doctype: { tax_notice: "納税通知書", government_notice: "行政からの通知", utility_bill: "公共料金", insurance: "保険", bank_statement: "銀行明細", invoice: "請求書", receipt: "領収書", school_letter: "学校からのお知らせ", medical: "医療", contract: "契約", subscription: "定期契約", advertisement: "広告", other: "その他" },
     lang_name: { en: "English", ja: "日本語" },
-    spaces: "スペース", space: "スペース", your_spaces: "あなたのスペース", current: "現在", owner: "所有者", member: "メンバー",
-    members_n: (n) => `${n}人`, new_space: "新しいスペース", space_name_ph: "スペース名（例：田中家、自宅、事務所）",
-    create: "作成", settings: "設定", rename: "名前を変更", save: "保存", members: "メンバー", remove: "削除", leave: "スペースを退出",
-    confirm_leave: "このスペースを退出しますか？書類は見えなくなります。", confirm_remove: (n) => `${n} をこのスペースから削除しますか？`,
-    invites: "メンバーを招待", invite_hint: "リンクを知っている人は7日以内に参加できます（最大10人）。参加にはGoogleログインが必要です。",
+    spaces: "アーカイブ", space: "アーカイブ", your_archive: "自分のアーカイブ", shared_with_you: "共有されたアーカイブ", current: "既定", owner: "自分", member: "共有",
+    members_n: (n) => `${n}人`,
+    archives_hint: "自分のアーカイブは1つ。誰かがアーカイブを共有してくれたら、それを既定にして、いつでも戻せます。スキャンは既定のアーカイブに入り、自分のものは自分のGoogleドライブに、共有されたものは所有者のドライブに保存されます。",
+    no_shared: "まだ共有されたアーカイブはありません。",
+    settings: "設定", rename: "名前を変更", save: "保存", members: "メンバー", remove: "削除", leave: "このアーカイブから退出",
+    confirm_leave: "このアーカイブから退出しますか？書類は見えなくなります。", confirm_remove: (n) => `${n} をこのアーカイブから削除しますか？`,
+    shared_by: (n) => `${n} が共有`,
+    invites: "このアーカイブを共有", invite_hint: "QRを見せるか、リンクを送ってください。7日間・最大10人まで有効。相手はGoogleでログインすると、このアーカイブの書類をすべて見られます。",
     create_invite: "招待リンクを作成", copy: "リンクをコピー", copied: "コピーしました", revoke: "無効化", expires: (d) => `有効期限 ${d}`, uses: (u, m) => `${u}/${m} 使用`,
     where_files_go: (name) => `このスペースでスキャンした書類は、所有者のGoogleドライブ内「Paper Archive / ${name}」に保存されます。`,
     join_title: "スペースに参加", join_desc: (space, by) => `<b>${esc(space)}</b> に招待されています${by ? `（${esc(by)} から）` : ""}。`,
     join: "参加する", joined: (name) => `${name} に参加しました。`, invite_invalid: "この招待リンクは無効です。", invite_expired: "この招待リンクは期限切れか、使用回数の上限に達しています。",
-    switch_to: "切替",
+    switch_to: "既定にする",
     share: "共有", share_app: "アプリを共有", share_app_hint: "撮る。わかる。手放せる。印刷して、郵便物の置き場に。",
     share_space: (n) => `「${n}」に招待`, share_space_hint: "スキャンするとこのスペースに参加できます。リンクは7日間・最大10人まで有効。参加にはGoogleログインが必要です。",
     share_native: "共有…", print: "印刷", open_link: "開く",
@@ -150,9 +157,15 @@ function applyLang() {
   langBtn.title = t("lang_name")[state.lang === "en" ? "ja" : "en"];
   shareBtn.querySelector("span").textContent = t("share");
   adminBtn.querySelector("span").textContent = t("admin");
+  signoutEl.querySelector("span").textContent = t("signout");
   paintIcons();
   renderSpaceBtn();
 }
+function openMenu(open) { menu.hidden = !open; menuBtn.setAttribute("aria-expanded", String(open)); }
+menuBtn.addEventListener("click", (e) => { e.stopPropagation(); openMenu(menu.hidden); });
+document.addEventListener("click", (e) => { if (!menu.hidden && !menu.contains(e.target)) openMenu(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") openMenu(false); });
+window.addEventListener("hashchange", () => openMenu(false));
 shareBtn.addEventListener("click", () => { location.hash = "#/share"; });
 adminBtn.addEventListener("click", () => { location.hash = "#/admin"; });
 langBtn.addEventListener("click", () => {
@@ -198,8 +211,9 @@ async function whoami() {
 
 function renderWho() {
   who.innerHTML = state.signedIn
-    ? `<span>${esc(state.user.name || state.user.email)}</span><a href="/auth/logout">${t("signout")}</a>`
+    ? `<div>${esc(state.user.name || state.user.email)}</div><div class="meta">${esc(state.user.email)}</div>`
     : gsiButton("/auth/login");
+  signoutEl.hidden = !state.signedIn;
 }
 function renderSpaceBtn() {
   spaceBtn.hidden = !state.space;
@@ -409,35 +423,28 @@ async function docView(id) {
 
 async function spacesView() {
   if (gate()) return;
-  view.innerHTML = `<h2>${t("your_spaces")}</h2><div id="list" class="empty">${t("loading")}</div>
-    <div class="card">
-      <h3>${t("new_space")}</h3>
-      <div class="search"><input id="newName" maxlength="60" placeholder="${esc(t("space_name_ph"))}"><button class="small" id="createBtn">${t("create")}</button></div>
-    </div>`;
-  const list = $("#list");
+  view.innerHTML = `<p class="sub">${t("archives_hint")}</p><h2>${t("your_archive")}</h2><div id="mine" class="empty">${t("loading")}</div>
+    <h2>${t("shared_with_you")}</h2><div id="shared" class="empty">${t("loading")}</div>`;
   try {
     const { current, spaces } = await api("/api/spaces");
-    list.className = ""; list.innerHTML = "";
-    for (const s of spaces) {
+    const card = (s) => {
       const el = document.createElement("div");
       el.className = "card";
       el.innerHTML = `<div class="row" style="justify-content:space-between">
-        <div><h3 style="display:inline">${esc(s.name)}</h3> <span class="pill">${s.role === "owner" ? t("owner") : t("member")}</span> ${s.id === current ? `<span class="pill warn">${t("current")}</span>` : ""}
-          <div class="meta">${t("members_n", s.member_count)}</div></div>
-        <div class="row">${s.id !== current ? `<button class="small" data-select="${s.id}">${t("switch_to")}</button>` : ""}<a class="small" href="#/space/${s.id}" style="text-decoration:none"><button class="small">${t("settings")}</button></a></div></div>`;
-      list.appendChild(el);
-    }
-    list.querySelectorAll("[data-select]").forEach((b) => b.addEventListener("click", async () => {
+        <div><h3 style="display:inline">${esc(s.name)}</h3> ${s.id === current ? `<span class="pill warn">${t("current")}</span>` : ""}
+          <div class="meta">${s.role === "owner" ? t("members_n", s.member_count) : t("shared_by", esc(s.owner_name || ""))}</div></div>
+        <div class="row">${s.id !== current ? `<button class="small" data-select="${s.id}">${t("switch_to")}</button>` : ""}<a href="#/space/${s.id}" style="text-decoration:none"><button class="small">${icon("settings")} ${t("settings")}</button></a></div></div>`;
+      return el;
+    };
+    const mine = $("#mine"), shared = $("#shared");
+    mine.innerHTML = ""; shared.innerHTML = ""; mine.className = ""; shared.className = "";
+    for (const s of spaces) (s.role === "owner" ? mine : shared).appendChild(card(s));
+    if (!shared.children.length) { shared.className = "empty"; shared.textContent = t("no_shared"); }
+    view.querySelectorAll("[data-select]").forEach((b) => b.addEventListener("click", async () => {
       await api(`/api/spaces/${b.dataset.select}/select`, { method: "POST" });
       await whoami(); state.lastResult = null; spacesView();
     }));
-  } catch (err) { list.textContent = err.status === 503 ? t("no_db") : t("could_not_load", err.message); }
-  $("#createBtn").addEventListener("click", async () => {
-    const name = $("#newName").value.trim();
-    if (!name) return;
-    try { await postJson("/api/spaces", { name }); await whoami(); state.lastResult = null; spacesView(); }
-    catch (err) { alert(t("save_failed", err.message)); }
-  });
+  } catch (err) { $("#mine").textContent = err.status === 503 ? t("no_db") : t("could_not_load", err.message); }
 }
 
 async function spaceView(id) {
@@ -457,7 +464,7 @@ async function spaceView(id) {
   view.innerHTML = `
     <div class="card">
       <h3>${esc(s.name)} <span class="pill">${isOwner ? t("owner") : t("member")}</span></h3>
-      <div class="meta">${t("where_files_go", esc(s.name))}</div>
+      <div class="meta">${isOwner ? t("where_files_go", esc(s.name)) : t("shared_by", esc(s.owner_name || ""))}</div>
       ${isOwner ? `<div class="search" style="margin-top:10px"><input id="rename" maxlength="60" value="${esc(s.name)}"><button class="small" id="renameBtn">${t("save")}</button></div>` : ""}
     </div>
     <div class="card">
@@ -500,14 +507,27 @@ async function spaceView(id) {
   });
 
   const il = $("#invites");
+  let qrcodeMod = null;
+  const drawQr = async (el, text) => {
+    qrcodeMod = qrcodeMod || (await import("/vendor/qrcode.mjs")).default;
+    const qr = qrcodeMod(0, "M"); qr.addData(text); qr.make();
+    el.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 4, scalable: true });
+  };
   const renderInvites = () => {
     il.innerHTML = "";
-    for (const inv of invites) {
-      const row = document.createElement("div"); row.className = "row"; row.style.justifyContent = "space-between"; row.style.padding = "6px 0";
-      row.innerHTML = `<span class="meta">${t("expires", inv.expires_at.slice(0, 10))} · ${t("uses", inv.uses, inv.max_uses)}</span>
-        <span class="row"><button class="small" data-copy="${esc(inv.url)}">${t("copy")}</button>${isOwner ? `<button class="small danger" data-revoke="${inv.id}">${t("revoke")}</button>` : ""}</span>`;
+    invites.forEach((inv, i) => {
+      const row = document.createElement("div"); row.className = "invite";
+      row.innerHTML = `<div class="row" style="justify-content:space-between;padding:6px 0">
+          <span class="meta">${t("expires", inv.expires_at.slice(0, 10))} · ${t("uses", inv.uses, inv.max_uses)}</span>
+          <span class="row"><button class="small" data-qr="${esc(inv.url)}">${icon("qr-code")}</button><button class="small" data-copy="${esc(inv.url)}">${t("copy")}</button>${isOwner ? `<button class="small danger" data-revoke="${inv.id}">${icon("trash-2")}</button>` : ""}</span>
+        </div><div class="qr" hidden></div>`;
       il.appendChild(row);
-    }
+      if (i === 0) { const q = row.querySelector(".qr"); q.hidden = false; drawQr(q, inv.url); }
+    });
+    il.querySelectorAll("[data-qr]").forEach((b) => b.addEventListener("click", () => {
+      const q = b.closest(".invite").querySelector(".qr");
+      q.hidden = !q.hidden; if (!q.hidden && !q.firstChild) drawQr(q, b.dataset.qr);
+    }));
     il.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = t("copied"); setTimeout(() => (b.textContent = t("copy")), 1500); }
       catch { prompt("", b.dataset.copy); }

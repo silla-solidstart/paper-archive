@@ -20,6 +20,7 @@ export type Role = "owner" | "member";
 export interface SpaceWithRole extends SpaceRow {
   role: Role;
   member_count: number;
+  owner_name: string | null;
 }
 
 const INVITE_TTL_DAYS = 7;
@@ -39,8 +40,9 @@ export function cleanName(raw: unknown): string | null {
 export async function listSpaces(env: Env, userId: string): Promise<SpaceWithRole[]> {
   const rows = await sql(env).query(
     `SELECT s.*, m.role,
-            (SELECT count(*)::int FROM space_members mm WHERE mm.space_id = s.id) AS member_count
-     FROM spaces s JOIN space_members m ON m.space_id = s.id
+            (SELECT count(*)::int FROM space_members mm WHERE mm.space_id = s.id) AS member_count,
+            coalesce(o.name, o.email) AS owner_name
+     FROM spaces s JOIN space_members m ON m.space_id = s.id JOIN users o ON o.id = s.owner_user_id
      WHERE m.user_id = $1
      ORDER BY (m.role = 'owner') DESC, s.created_at`,
     [userId],
@@ -51,8 +53,9 @@ export async function listSpaces(env: Env, userId: string): Promise<SpaceWithRol
 export async function getSpaceForUser(env: Env, spaceId: string, userId: string): Promise<SpaceWithRole | null> {
   const rows = await sql(env).query(
     `SELECT s.*, m.role,
-            (SELECT count(*)::int FROM space_members mm WHERE mm.space_id = s.id) AS member_count
-     FROM spaces s JOIN space_members m ON m.space_id = s.id
+            (SELECT count(*)::int FROM space_members mm WHERE mm.space_id = s.id) AS member_count,
+            coalesce(o.name, o.email) AS owner_name
+     FROM spaces s JOIN space_members m ON m.space_id = s.id JOIN users o ON o.id = s.owner_user_id
      WHERE s.id = $1 AND m.user_id = $2`,
     [spaceId, userId],
   );
@@ -82,7 +85,7 @@ export async function currentSpace(env: Env, user: { id: string; name: string | 
     return mine[0];
   }
   const created = await createSpace(env, user.id, user.name?.trim() || user.email.split("@")[0]);
-  return { ...created, role: "owner", member_count: 1 };
+  return { ...created, role: "owner", member_count: 1, owner_name: user.name?.trim() || user.email };
 }
 
 export async function setCurrentSpace(env: Env, userId: string, spaceId: string): Promise<boolean> {
