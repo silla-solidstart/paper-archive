@@ -63,6 +63,13 @@ in use are vendored, as inline SVG in `public/icons.js`; add more by extending t
 name list in the generator step recorded in `public/vendor/README.txt`. No emoji in
 the interface; the retention glyphs ◎ ◍ ◑ ⚠ are typographic and stay.
 
+## Copy
+
+Headline: **Scan it. Forget it. Find it.** / **撮る。忘れる。見つかる。**
+Supporting line: *Paper mail that explains itself — what it is, what it wants from you,
+and whether you can throw it away.* / *撮るだけで、わかる。何の書類か、何をすべきか、捨てていいか。* The pipeline arrows (scan → understand → decide) are
+not copy; they are a diagram, and they were retired on 2026-09-20.
+
 ## Voice (short)
 
 Plain, bilingual, unhurried. English and Japanese are peers, not translations of

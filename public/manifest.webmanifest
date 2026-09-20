@@ -1,7 +1,7 @@
 {
   "name": "Paper Archive",
   "short_name": "Paper",
-  "description": "Scan mail, know what it wants, know whether to keep the original.",
+  "description": "Scan it. Forget it. Find it. Paper mail that explains itself.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
