@@ -11,12 +11,18 @@
  */
 "use strict";
 
+// ?theme=light|dark overrides the OS setting (testing, screenshots); persisted per device.
+{ const th = new URLSearchParams(location.search).get("theme");
+  try { if (th === "light" || th === "dark") localStorage.setItem("pa_theme", th); if (th === "auto") localStorage.removeItem("pa_theme"); } catch {}
+  let saved = null; try { saved = localStorage.getItem("pa_theme"); } catch {}
+  if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved; }
+
 const MAX_EDGE = 2200;
 const JPEG_QUALITY = 0.85;
 
 const $ = (sel, el = document) => el.querySelector(sel);
-const view = $("#view"), who = $("#who"), fileInput = $("#file"), langBtn = $("#lang"), spaceBtn = $("#space"), shareBtn = $("#shareBtn"), adminBtn = $("#adminBtn"),
-      menuBtn = $("#menuBtn"), menu = $("#menu"), signoutEl = $("#signout");
+const view = $("#view"), who = $("#who"), fileCam = $("#fileCam"), fileUp = $("#fileUp"), langBtn = $("#lang"), shareBtn = $("#shareBtn"), adminBtn = $("#adminBtn"),
+      menuBtn = $("#menuBtn"), menu = $("#menu"), signoutEl = $("#signout"), archivesEl = $("#archives"), archLabel = $("#archLabel"), avatarText = $("#avatarText");
 
 // Google's standard sign-in button: four-colour G, Roboto, one language per button (spec in src/google-button.ts).
 const GOOGLE_G = `<svg class="gsi-g" viewBox="0 0 48 48" aria-hidden="true">
@@ -31,7 +37,7 @@ const gsiButton = (href, extra = "") => `<a class="gsi ${extra}" href="${href}" 
 const icon = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${(window.LUCIDE || {})[name] || ""}</svg>`;
 function paintIcons(root = document) { root.querySelectorAll("i[data-icon]").forEach((el) => { if (!el.firstChild) el.innerHTML = icon(el.dataset.icon); }); }
 
-const state = { signedIn: false, user: null, space: null, admin: false, token: "", lastResult: null, lang: "en" };
+const state = { signedIn: false, user: null, space: null, spaces: [], admin: false, token: "", lastResult: null, lang: "en" };
 try { state.token = localStorage.getItem("pa_token") || ""; } catch {}
 try {
   const saved = localStorage.getItem("pa_lang");
@@ -89,6 +95,7 @@ const STR = {
     share: "Share", share_app: "Share the app", share_app_hint: "Scan it. Know it. Let it go. Print this and put it where the mail lands.",
     share_space: (n) => `Invite to ${n}`, share_space_hint: "Scan to join this space. The link works for 7 days, up to 10 people; they sign in with Google.",
     share_native: "Share…", print: "Print", open_link: "Open",
+    signed_in_as: "Signed in as", take_photo: "Take a photo", upload: "Upload a file", api_token_link: "Use an API token", yours_short: "yours",
     admin: "Admin", admin_title: "Who can sign in", admin_hint: "Invite-only. Add an email, or @domain for everyone at a domain. Removal takes effect on their next request.",
     admin_bootstrap: (list) => `Always allowed (config): ${list}`, entry: "Email or @domain", role: "Role", note: "Note (optional)", added: "Added", add: "Add",
     role_admin: "admin", role_member: "member", confirm_remove_entry: (e) => `Remove ${e} from the allow-list?`,
@@ -141,6 +148,7 @@ const STR = {
     share: "共有", share_app: "アプリを共有", share_app_hint: "撮る。わかる。手放せる。印刷して、郵便物の置き場に。",
     share_space: (n) => `「${n}」に招待`, share_space_hint: "スキャンするとこのスペースに参加できます。リンクは7日間・最大10人まで有効。参加にはGoogleログインが必要です。",
     share_native: "共有…", print: "印刷", open_link: "開く",
+    signed_in_as: "ログイン中", take_photo: "写真を撮る", upload: "ファイルを選ぶ", api_token_link: "APIトークンを使う", yours_short: "自分",
     admin: "管理", admin_title: "ログインできる人", admin_hint: "招待制です。メールアドレス、またはドメイン全体なら @ドメイン を追加します。削除は次のリクエストから反映されます。",
     admin_bootstrap: (list) => `常に許可（設定）: ${list}`, entry: "メールまたは @ドメイン", role: "権限", note: "メモ（任意）", added: "追加日", add: "追加",
     role_admin: "管理者", role_member: "メンバー", confirm_remove_entry: (e) => `${e} を許可リストから削除しますか？`,
@@ -158,6 +166,7 @@ function applyLang() {
   shareBtn.querySelector("span").textContent = t("share");
   adminBtn.querySelector("span").textContent = t("admin");
   signoutEl.querySelector("span").textContent = t("signout");
+  archLabel.textContent = t("space");
   paintIcons();
   renderSpaceBtn();
 }
@@ -202,25 +211,58 @@ async function whoami() {
     const { user, space, admin } = await api("/api/me");
     state.signedIn = true; state.user = user; state.space = space; state.admin = Boolean(admin);
   } catch { state.signedIn = false; state.user = null; state.admin = false; }
-  if (!state.signedIn && state.token) {
-    // The bearer token is the operator: admin, in its own space.
-    try { const { spaces, current } = await api("/api/spaces"); state.space = spaces.find((s) => s.id === current) || null; state.admin = true; } catch { state.space = null; }
+  state.spaces = [];
+  if (canCall()) {
+    try {
+      const { spaces, current } = await api("/api/spaces");
+      state.spaces = spaces;
+      state.space = spaces.find((s) => s.id === current) || state.space || null;
+      if (!state.signedIn) state.admin = true; // the bearer token is the operator
+    } catch {}
   }
   renderWho(); renderSpaceBtn();
 }
 
+function initials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  // Latin: first letters of first two words; CJK: first character.
+  if (/[\u3040-\u30ff\u4e00-\u9fff]/.test(parts[0])) return parts[0].slice(0, 1);
+  return parts.slice(0, 2).map((p) => p[0].toUpperCase()).join("");
+}
+
 function renderWho() {
-  who.innerHTML = state.signedIn
-    ? `<div>${esc(state.user.name || state.user.email)}</div><div class="meta">${esc(state.user.email)}</div>`
-    : gsiButton("/auth/login");
+  if (state.signedIn) {
+    who.innerHTML = `<div>${t("signed_in_as")}</div><div class="name">${esc(state.user.name || state.user.email)}</div><div>${esc(state.user.email)}</div>`;
+    avatarText.textContent = initials(state.user.name || state.user.email);
+  } else {
+    who.innerHTML = gsiButton("/auth/login");
+    avatarText.innerHTML = state.token ? icon("key-round") : icon("user");
+  }
   signoutEl.hidden = !state.signedIn;
 }
+
 function renderSpaceBtn() {
-  spaceBtn.hidden = !state.space;
-  if (state.space) spaceBtn.querySelector("span").textContent = state.space.name;
   adminBtn.hidden = !state.admin;
+  const hasArchives = canCall() && state.spaces.length > 0;
+  archLabel.hidden = !hasArchives; archivesEl.hidden = !hasArchives;
+  archivesEl.innerHTML = "";
+  for (const s of state.spaces) {
+    const on = state.space && s.id === state.space.id;
+    const row = document.createElement("div");
+    row.className = "arch" + (on ? " on" : "");
+    row.setAttribute("role", "menuitemradio"); row.setAttribute("aria-checked", String(!!on));
+    row.innerHTML = `<span class="dot"></span><span class="t"><b>${esc(s.name)}</b><small>${s.role === "owner" ? t("yours_short") : t("shared_by", esc(s.owner_name || ""))}</small></span>
+      <a class="gear" href="#/space/${s.id}" title="${t("settings")}">${icon("settings")}</a>`;
+    row.addEventListener("click", async (e) => {
+      if (e.target.closest(".gear")) return;
+      if (on) { openMenu(false); return; }
+      try { await api(`/api/spaces/${s.id}/select`, { method: "POST" }); await whoami(); state.lastResult = null; openMenu(false); route(); }
+      catch (err) { alert(err.message); }
+    });
+    archivesEl.appendChild(row);
+  }
 }
-spaceBtn.addEventListener("click", () => { location.hash = "#/spaces"; });
 
 // ---------- router ----------
 
@@ -265,15 +307,17 @@ function gate() {
 
 async function scanView() {
   view.innerHTML = `
-    <p class="sub">${t("sub")}</p>
-    <button class="scan" id="scanBtn">${t("scan")}</button>
-    <details class="token" id="tokenBox" ${state.signedIn ? "hidden" : ""}>
-      <summary>${t("token_toggle")}</summary>
-      <input id="token" type="password" placeholder="APP_BEARER_TOKEN" autocomplete="off" value="${esc(state.token)}">
-    </details>
+    <div class="scanwrap">
+      <button class="shutter" id="scanBtn" aria-label="${esc(t("take_photo"))}">${icon("camera")}</button>
+      <div class="meta">${t("take_photo")}</div>
+      <div style="margin-top:18px"><button class="upload" id="uploadBtn">${icon("upload")} ${t("upload")}</button></div>
+      ${state.signedIn ? "" : `<details class="token" id="tokenBox"><summary>${t("api_token_link")}</summary>
+        <input id="token" type="password" placeholder="APP_BEARER_TOKEN" autocomplete="off" value="${esc(state.token)}"></details>`}
+    </div>
     <div class="status" id="status"></div>
     <div id="result"></div>`;
-  $("#scanBtn").addEventListener("click", () => fileInput.click());
+  $("#scanBtn").addEventListener("click", () => fileCam.click());
+  $("#uploadBtn").addEventListener("click", () => fileUp.click());
   const tokenEl = $("#token");
   if (tokenEl) tokenEl.addEventListener("change", async () => {
     state.token = tokenEl.value.trim();
@@ -283,7 +327,7 @@ async function scanView() {
   if (state.lastResult) $("#result").appendChild(resultCard(state.lastResult));
 }
 
-fileInput.addEventListener("change", async (e) => {
+for (const input of [fileCam, fileUp]) input.addEventListener("change", async (e) => {
   const file = e.target.files && e.target.files[0];
   e.target.value = "";
   if (!file) return;
@@ -305,9 +349,9 @@ async function downscale(file) {
 }
 
 async function process(file) {
-  const btn = $("#scanBtn"), status = $("#status"), result = $("#result");
+  const btn = $("#scanBtn"), up = $("#uploadBtn"), status = $("#status"), result = $("#result");
   if (!canCall()) { status.textContent = t("need_auth"); return; }
-  btn.disabled = true;
+  btn.disabled = true; if (up) up.disabled = true;
   try {
     status.textContent = t("preparing");
     const { blob, type } = await downscale(file);
@@ -325,7 +369,7 @@ async function process(file) {
     const stage = err.body && err.body.stage ? ` (${err.body.stage})` : "";
     status.textContent = `${t("failed")}: ${err.message}${stage}`;
   } finally {
-    btn.disabled = false;
+    btn.disabled = false; if (up) up.disabled = false;
   }
 }
 

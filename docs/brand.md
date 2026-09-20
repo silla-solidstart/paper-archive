@@ -87,8 +87,11 @@ Plain, bilingual, unhurried. English and Japanese are peers, not translations of
 each other. Advice about keeping originals is conservative and says "unsure"
 when it is unsure.
 
-## Not yet applied
+## In the app (applied 2026-09-20)
 
-The app's interactive accent (buttons, links, active tab) is still the earlier
-blue. Restyling it to navy/vermilion is a deliberate follow-up, to be checked in
-both themes, not part of the logo change.
+Primary actions are ink on paper (light) and paper on ink (dark); vermilion is
+the single highlight (default-archive dot, links, the cursor). Header: mark +
+wordmark left, one avatar/account menu right ("Signed in as", archives with a
+switch, Share, Admin, language, Sign out). Scan screen: a shutter-style camera
+button and an "Upload a file" alternative — no copy. `?theme=light|dark` overrides
+the OS theme for testing.

@@ -25,16 +25,17 @@
       <rect x="258" y="154" width="136" height="94" rx="12" fill="none" stroke="currentColor" stroke-width="18"/>
       <path d="M258 170 L326 222 L394 170" fill="none" stroke="currentColor" stroke-width="18" stroke-linejoin="round"/>
 </svg><span class="wordmark">Paper Archive</span></div>
-  <div class="hdr-right">
-    <button class="chip" id="space" hidden><i data-icon="users"></i><span></span></button>
-    <button class="chip icon-only" id="menuBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Menu"><i data-icon="ellipsis-vertical"></i></button>
-  </div>
+  <button class="avatar" id="menuBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Account"><span id="avatarText"></span></button>
 </header>
 <div class="sheet" id="menu" hidden role="menu">
   <div class="who" id="who"></div>
+  <div class="label" id="archLabel">Archive</div>
+  <div id="archives"></div>
+  <div class="sep"></div>
   <button role="menuitem" id="shareBtn"><i data-icon="qr-code"></i><span>Share</span></button>
   <button role="menuitem" id="adminBtn" hidden><i data-icon="shield-check"></i><span>Admin</span></button>
   <button role="menuitem" id="lang"><i data-icon="languages"></i><span>日本語</span></button>
+  <div class="sep"></div>
   <a role="menuitem" id="signout" href="/auth/logout" hidden><i data-icon="log-out"></i><span>Sign out</span></a>
 </div>
 
@@ -47,7 +48,8 @@
   <a href="#/search" data-tab="search"><i class="glyph" data-icon="search"></i><span>Search</span></a>
 </nav>
 
-<input id="file" type="file" accept="image/*,application/pdf" capture="environment" hidden>
+<input id="fileCam" type="file" accept="image/*" capture="environment" hidden>
+<input id="fileUp" type="file" accept="image/*,application/pdf" hidden>
 <script src="/icons.js"></script>
 <script src="/app.js"></script>
 </body>
