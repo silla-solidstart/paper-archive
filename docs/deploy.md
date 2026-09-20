@@ -40,7 +40,8 @@ run the sync script".
    secret and is written into the workflow. If you ever rename the repo, update the
    provider's attribute condition.
 
-4. **Worker secrets, once:** `npx wrangler login` (browser), then `scripts/sync-secrets.sh`.
+4. **Worker secrets, once:** `scripts/sync-secrets.sh`. It authenticates to Cloudflare with the
+   token from Secret Manager; no `wrangler login` needed.
 
 5. **First deploy** can be from the laptop (below) or by pushing to `main`.
 
@@ -64,9 +65,10 @@ code — but not of a migration, so keep migrations additive.
 
 ```bash
 npm run typecheck && npm test
-npm run migrate                       # DATABASE_URL from Secret Manager
-scripts/sync-secrets.sh               # only when secrets changed
-npx wrangler deploy
+npm run migrate                                            # DATABASE_URL from Secret Manager
+scripts/sync-secrets.sh                                    # only when secrets changed
+CLOUDFLARE_API_TOKEN="$(gcloud secrets versions access latest --secret=CLOUDFLARE_API_TOKEN --project=solidstart-paper-archive)" \
+CLOUDFLARE_ACCOUNT_ID=3a39a7add76ceae12541aa5e110afde0 npx wrangler deploy
 curl -fsS https://pa.solidstart.jp/health
 ```
 

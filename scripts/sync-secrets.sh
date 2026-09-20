@@ -9,6 +9,11 @@ cd "$(dirname "$0")/.."
 PROJECT=solidstart-paper-archive
 get() { gcloud secrets versions access latest --secret="$1" --project="$PROJECT"; }
 
+# wrangler authenticates with the same token CI uses, from Secret Manager — no
+# `wrangler login` needed. The account id is not a secret.
+export CLOUDFLARE_API_TOKEN="$(get CLOUDFLARE_API_TOKEN)"
+export CLOUDFLARE_ACCOUNT_ID=3a39a7add76ceae12541aa5e110afde0
+
 for name in APP_BEARER_TOKEN SESSION_SECRET ANTHROPIC_API_KEY DATABASE_URL \
             GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET; do
   get "$name" | npx wrangler secret put "$name"
