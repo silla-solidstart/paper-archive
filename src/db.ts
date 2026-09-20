@@ -13,7 +13,8 @@ import type { OcrResult } from "./docai.ts";
 
 export interface DocumentRow {
   id: string;
-  user_id: string;
+  space_id: string;
+  user_id: string; // scanned by
   drive_file_id: string | null;
   filename: string | null;
   ocr_text: string | null;
@@ -51,6 +52,7 @@ export interface UserRow {
   google_refresh_token_enc: string | null;
   google_access_token: string | null;
   google_token_expires_at: string | null;
+  current_space_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -144,21 +146,22 @@ export async function updateDocumentFiling(
 /** The human's decision overrides the model's. Returns false if not found. */
 export async function updateDocumentRetention(
   env: Env,
-  userId: string,
+  spaceId: string,
   id: string,
   retention: RetentionStatus,
   reason: string,
 ): Promise<boolean> {
   const rows = await sql(env).query(
     `UPDATE documents SET retention = $3::retention_status, retention_reason = $4
-     WHERE user_id = $1 AND id = $2 RETURNING id`,
-    [userId, id, retention, reason],
+     WHERE space_id = $1 AND id = $2 RETURNING id`,
+    [spaceId, id, retention, reason],
   );
   return (rows as unknown[]).length > 0;
 }
 
 export async function insertDocument(
   env: Env,
+  spaceId: string,
   userId: string,
   filename: string | null,
   ocr: OcrResult,
@@ -181,7 +184,7 @@ export async function insertDocument(
 
   const rows = await q.query(
     `INSERT INTO documents (
-       user_id, filename,
+       space_id, user_id, filename,
        ocr_text, ocr_provider, ocr_confidence,
        title, document_type, issuer, document_date, summary,
        action_required, action_type, action_date,
@@ -189,7 +192,7 @@ export async function insertDocument(
        extracted_data, extraction_model, status,
        lang, cost_usd, ocr_pages, llm_input_tokens, llm_output_tokens
      ) VALUES (
-       $1, $2,
+       $24, $1, $2,
        $3, $4, $5,
        $6, $7, $8, $9, $10,
        $11, $12, $13,
@@ -206,17 +209,18 @@ export async function insertDocument(
       JSON.stringify(extracted), model, status,
       meta?.lang ?? null, meta?.cost.total_usd ?? null, ocr.pageCount,
       meta?.inputTokens ?? null, meta?.outputTokens ?? null,
+      spaceId,
     ],
   );
   return (rows as Array<{ id: string }>)[0].id;
 }
 
-const LIST_COLUMNS = `id, title, document_type, issuer, document_date, summary,
+const LIST_COLUMNS = `id, user_id, title, document_type, issuer, document_date, summary,
   action_required, action_type, action_date, retention, lang, cost_usd, created_at`;
 
 export async function searchDocuments(
   env: Env,
-  userId: string,
+  spaceId: string,
   query: string,
   limit = 20,
 ): Promise<Partial<DocumentRow>[]> {
@@ -228,56 +232,57 @@ export async function searchDocuments(
   const rows = await q.query(
     `SELECT ${LIST_COLUMNS}
      FROM documents
-     WHERE user_id = $1
+     WHERE space_id = $1
        AND (ocr_text ILIKE $2 OR title ILIKE $2 OR issuer ILIKE $2 OR summary ILIKE $2)
      ORDER BY created_at DESC
      LIMIT $3`,
-    [userId, pattern, limit],
+    [spaceId, pattern, limit],
   );
   return rows as Partial<DocumentRow>[];
 }
 
 export async function getDocument(
   env: Env,
-  userId: string,
+  spaceId: string,
   id: string,
 ): Promise<DocumentRow | null> {
   const q = sql(env);
   const rows = await q.query(
-    `SELECT * FROM documents WHERE user_id = $1 AND id = $2`,
-    [userId, id],
+    `SELECT * FROM documents WHERE space_id = $1 AND id = $2`,
+    [spaceId, id],
   );
   return (rows as DocumentRow[])[0] ?? null;
 }
 
 /** Removes the index row. Returns the Drive file id so the caller can trash it. */
-export async function deleteDocument(env: Env, userId: string, id: string): Promise<{ drive_file_id: string | null } | null> {
+export async function deleteDocument(env: Env, spaceId: string, id: string): Promise<{ drive_file_id: string | null } | null> {
   const rows = await sql(env).query(
-    `DELETE FROM documents WHERE user_id = $1 AND id = $2 RETURNING drive_file_id`,
-    [userId, id],
+    `DELETE FROM documents WHERE space_id = $1 AND id = $2 RETURNING drive_file_id`,
+    [spaceId, id],
   );
   return (rows as Array<{ drive_file_id: string | null }>)[0] ?? null;
 }
 
 export async function listActions(
   env: Env,
-  userId: string,
+  spaceId: string,
   limit = 50,
 ): Promise<Partial<DocumentRow>[]> {
   const q = sql(env);
   const rows = await q.query(
     `SELECT ${LIST_COLUMNS}
      FROM documents
-     WHERE user_id = $1 AND action_required
+     WHERE space_id = $1 AND action_required
      ORDER BY action_date ASC NULLS LAST, created_at DESC
      LIMIT $2`,
-    [userId, limit],
+    [spaceId, limit],
   );
   return rows as Partial<DocumentRow>[];
 }
 
 export interface ScanCostRow {
   userId: string | null;
+  spaceId: string | null;
   documentId: string | null;
   status: "complete" | "failed";
   stage: string | null;
@@ -303,12 +308,12 @@ export async function recordScanCost(env: Env, r: ScanCostRow): Promise<void> {
     `INSERT INTO scan_costs (
        user_id, document_id, status, stage, lang, mime_type, bytes,
        ocr_pages, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-       ocr_usd, llm_usd, total_usd, pricing_as_of, duration_ms
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+       ocr_usd, llm_usd, total_usd, pricing_as_of, duration_ms, space_id
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
     [
       r.userId, r.documentId, r.status, r.stage, r.lang, r.mimeType, r.bytes,
       r.ocrPages, r.model, r.inputTokens, r.outputTokens, r.cacheReadTokens, r.cacheWriteTokens,
-      r.ocrUsd, r.llmUsd, r.totalUsd, r.pricingAsOf, r.durationMs,
+      r.ocrUsd, r.llmUsd, r.totalUsd, r.pricingAsOf, r.durationMs, r.spaceId,
     ],
   );
 }
@@ -351,22 +356,28 @@ export async function costSummary(env: Env, userId: string | null): Promise<Reco
      FROM scan_costs ${where ? where + " AND" : "WHERE"} status = 'complete' GROUP BY 1 ORDER BY 2 DESC`,
     params,
   )) as Record<string, unknown>[];
-  return { ...totals, by_month: byMonth, by_model: byModel };
+  const bySpace = (await q.query(
+    `SELECT s.name AS space, count(*)::int AS attempts, coalesce(sum(c.total_usd), 0)::float AS total_usd
+     FROM scan_costs c LEFT JOIN spaces s ON s.id = c.space_id ${where.replace("user_id", "c.user_id")}
+     GROUP BY 1 ORDER BY 3 DESC LIMIT 20`,
+    params,
+  )) as Record<string, unknown>[];
+  return { ...totals, by_month: byMonth, by_model: byModel, by_space: bySpace };
 }
 
 export async function listRecent(
   env: Env,
-  userId: string,
+  spaceId: string,
   limit = 50,
 ): Promise<Partial<DocumentRow>[]> {
   const q = sql(env);
   const rows = await q.query(
     `SELECT ${LIST_COLUMNS}, status
      FROM documents
-     WHERE user_id = $1
+     WHERE space_id = $1
      ORDER BY created_at DESC
      LIMIT $2`,
-    [userId, limit],
+    [spaceId, limit],
   );
   return rows as Partial<DocumentRow>[];
 }

@@ -217,14 +217,14 @@ mk GOOGLE_OAUTH_CLIENT_SECRET '…'
   `node scripts/eval-extract.ts <folder>` against the dev server. One line per document,
   full responses saved for diffing between prompt versions.
 
+### 3b. Admin cost dashboard (local, no deploy)
+
+`npm run dashboard` → http://localhost:8799. Reads the ledger from Neon via Secret Manager.
+
 ### 4. Deploy
 
 Laptop for now: `scripts/sync-secrets.sh && npx wrangler deploy` (after `npx wrangler login`
 once). Then https://pa.solidstart.jp/health, sign in there, and the **phone test** — camera,
 HEIC→JPEG via canvas, Add to Home Screen.
 
-CI/CD is written (`.github/workflows/deploy.yml`: typecheck + tests + JWT self-test on
-every push, deploy `main` to Cloudflare). To turn it on: create the GitHub repo
-(github.com/new → `paper-archive`, private, empty; the SSH key is already authorised), push,
-and add repo secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit) and
-`CLOUDFLARE_ACCOUNT_ID`. Worker secrets stay in Cloudflare, set once by the sync script.
+CI/CD: see `docs/deploy.md` — GitHub Actions deploys `main`; three repo secrets to add.

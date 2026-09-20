@@ -1,20 +1,23 @@
 /* Paper Archive — one file, no build step.
  *
  * Screens (hash routes): #/ scan · #/recent · #/actions · #/search · #/doc/:id
+ *                        #/spaces · #/space/:id · #/join/:token
  * Auth: session cookie from Sign in with Google, or a bearer token pasted into
  * the disclosure on the scan screen (pre-sign-in tester mode).
  * Language: EN / 日本語 — UI strings here, and the model writes the summary
  * and retention reason in the same language (sent as X-Lang).
+ * Spaces: everything you see is the current space; files go to the space
+ * owner's Google Drive.
  */
 "use strict";
 
-const MAX_EDGE = 2200;      // downscale long edge before upload — see downscale()
+const MAX_EDGE = 2200;
 const JPEG_QUALITY = 0.85;
 
 const $ = (sel, el = document) => el.querySelector(sel);
-const view = $("#view"), who = $("#who"), fileInput = $("#file"), langBtn = $("#lang");
+const view = $("#view"), who = $("#who"), fileInput = $("#file"), langBtn = $("#lang"), spaceBtn = $("#space");
 
-const state = { signedIn: false, user: null, token: "", lastResult: null, lang: "en" };
+const state = { signedIn: false, user: null, space: null, token: "", lastResult: null, lang: "en" };
 try { state.token = localStorage.getItem("pa_token") || ""; } catch {}
 try {
   const saved = localStorage.getItem("pa_lang");
@@ -31,9 +34,10 @@ const STR = {
     token_toggle: "Use an API token instead",
     preparing: "Preparing…", reading: (kb) => `Reading ${kb} KB… (OCR, then understanding)`,
     failed: "Failed", need_auth: "Sign in, or paste an API token below.",
-    not_filed: "Not filed — sign in with Google to file scans to your Drive.",
+    not_filed: "Not filed — the space owner hasn't connected Google Drive.",
+    not_filed_self: "Not filed — sign in with Google to file scans to your Drive.",
     filing_failed: "Indexed, but filing to Drive failed. Nothing is kept server-side, so re-scan to file it.",
-    reconnect: (href) => `Google access has lapsed — <a href="${href}">sign in again</a>, then re-scan to file it.`,
+    reconnect: (href) => `The space owner's Google access has lapsed — they need to <a href="${href}">sign in again</a>; then re-scan to file it.`,
     not_in_drive: "Not in Drive — re-scan to file it.",
     open_drive: "Open in Google Drive",
     retention: { digital_sufficient: "◎ Digital copy likely sufficient", keep_temporarily: "◍ Keep temporarily", keep_original: "◑ Keep original", unsure: "⚠ Unsure — your call" },
@@ -41,7 +45,7 @@ const STR = {
     action_required: "Action required", action: { payment: "payment", appointment: "appointment", renewal: "renewal", signature: "signature", response: "response", cancellation: "cancellation" },
     overdue: (d) => `overdue by ${d}d`, due_today: "due today", due_in: (d) => `due in ${d}d`, due_on: (date) => `due ${date}`,
     pill_review: "review", pill_not_in_drive: "not in Drive",
-    recent: "Recent", needs_action: "Needs action", nothing_yet: "Nothing scanned yet.", nothing_due: "Nothing needs action. 🎉",
+    recent: "Recent", needs_action: "Needs action", nothing_yet: "Nothing scanned in this space yet.", nothing_due: "Nothing needs action. 🎉",
     search_ph: "固定資産税, Tokyo Gas, 上越市…", search_hint: "Search OCR text, titles and issuers. Japanese works.", no_matches: "No matches.",
     loading: "Loading…", could_not_load: (m) => `Could not load: ${m}`, no_db: "No database configured yet.",
     gate: "Sign in with Google, or paste an API token on the Scan screen.", not_found: "Not found.",
@@ -51,9 +55,20 @@ const STR = {
     delete_failed: (m) => `Delete failed: ${m}`, save_failed: (m) => `Could not save: ${m}`,
     cost: (jpy, usd, tokens) => `Cost ≈ ¥${jpy} (US$${usd}) · ${tokens.toLocaleString()} tokens`,
     cost_short: (jpy) => `≈ ¥${jpy}`,
-    fields: { type: "Type", issuer: "Issuer", date: "Date", amount: "Amount", due: "Due", reference: "Reference", categories: "Categories", status: "Status", model: "Model", ocr: "OCR", lang: "Interpreted in", cost: "Cost" },
+    fields: { type: "Type", issuer: "Issuer", date: "Date", amount: "Amount", due: "Due", reference: "Reference", categories: "Categories", status: "Status", model: "Model", ocr: "OCR", lang: "Interpreted in", cost: "Cost", scanned_by: "Scanned by" },
     doctype: { tax_notice: "Tax notice", government_notice: "Government notice", utility_bill: "Utility bill", insurance: "Insurance", bank_statement: "Bank statement", invoice: "Invoice", receipt: "Receipt", school_letter: "School letter", medical: "Medical", contract: "Contract", subscription: "Subscription", advertisement: "Advertisement", other: "Other" },
     lang_name: { en: "English", ja: "日本語" },
+    // spaces
+    spaces: "Spaces", space: "Space", your_spaces: "Your spaces", current: "current", owner: "owner", member: "member",
+    members_n: (n) => `${n} member${n === 1 ? "" : "s"}`, new_space: "New space", space_name_ph: "Space name, e.g. Family, 田中家, Office",
+    create: "Create", settings: "Settings", rename: "Rename", save: "Save", members: "Members", remove: "Remove", leave: "Leave space",
+    confirm_leave: "Leave this space? You will no longer see its documents.", confirm_remove: (n) => `Remove ${n} from this space?`,
+    invites: "Invite people", invite_hint: "Anyone with the link can join within 7 days (up to 10 people). They sign in with Google to accept.",
+    create_invite: "Create invite link", copy: "Copy link", copied: "Copied", revoke: "Revoke", expires: (d) => `expires ${d}`, uses: (u, m) => `${u}/${m} used`,
+    where_files_go: (name) => `Files scanned into this space are stored in the space owner's Google Drive, under Paper Archive / ${name}.`,
+    join_title: "Join a space", join_desc: (space, by) => `You've been invited to <b>${esc(space)}</b>${by ? ` by ${esc(by)}` : ""}.`,
+    join: "Join", join_signin: "Sign in with Google to join", joined: (name) => `You're in ${name}.`, invite_invalid: "This invite link is invalid.", invite_expired: "This invite link has expired or was used up.",
+    switch_to: "Switch",
   },
   ja: {
     tab_scan: "スキャン", tab_recent: "最近", tab_actions: "要対応", tab_search: "検索",
@@ -62,9 +77,10 @@ const STR = {
     token_toggle: "APIトークンを使う",
     preparing: "準備中…", reading: (kb) => `読み取り中 ${kb} KB…（OCR → 解析）`,
     failed: "失敗", need_auth: "ログインするか、下にAPIトークンを入力してください。",
-    not_filed: "未保存 — Googleでログインするとドライブに保存されます。",
+    not_filed: "未保存 — スペースの所有者がGoogleドライブを接続していません。",
+    not_filed_self: "未保存 — Googleでログインするとドライブに保存されます。",
     filing_failed: "索引には登録されましたが、ドライブへの保存に失敗しました。サーバーには保存されないため、再スキャンしてください。",
-    reconnect: (href) => `Googleへのアクセスが切れました。<a href="${href}">再ログイン</a>してから再スキャンしてください。`,
+    reconnect: (href) => `スペース所有者のGoogleアクセスが切れています。所有者が<a href="${href}">再ログイン</a>した後、再スキャンしてください。`,
     not_in_drive: "ドライブ未保存 — 再スキャンしてください。",
     open_drive: "Googleドライブで開く",
     retention: { digital_sufficient: "◎ デジタル控えで十分", keep_temporarily: "◍ 一時的に保管", keep_original: "◑ 原本を保管", unsure: "⚠ 判断が必要" },
@@ -72,7 +88,7 @@ const STR = {
     action_required: "要対応", action: { payment: "支払い", appointment: "予約", renewal: "更新", signature: "署名", response: "返信", cancellation: "解約" },
     overdue: (d) => `期限超過 ${d}日`, due_today: "本日期限", due_in: (d) => `あと${d}日`, due_on: (date) => `期限 ${date}`,
     pill_review: "要確認", pill_not_in_drive: "未保存",
-    recent: "最近", needs_action: "要対応", nothing_yet: "まだスキャンがありません。", nothing_due: "対応が必要なものはありません 🎉",
+    recent: "最近", needs_action: "要対応", nothing_yet: "このスペースにはまだスキャンがありません。", nothing_due: "対応が必要なものはありません 🎉",
     search_ph: "固定資産税、東京ガス、上越市…", search_hint: "OCRテキスト・タイトル・発行元を検索します。", no_matches: "該当なし。",
     loading: "読み込み中…", could_not_load: (m) => `読み込めませんでした: ${m}`, no_db: "データベースが未設定です。",
     gate: "Googleでログインするか、スキャン画面でAPIトークンを入力してください。", not_found: "見つかりません。",
@@ -82,9 +98,19 @@ const STR = {
     delete_failed: (m) => `削除に失敗: ${m}`, save_failed: (m) => `保存できませんでした: ${m}`,
     cost: (jpy, usd, tokens) => `費用 約¥${jpy}（US$${usd}）・${tokens.toLocaleString()}トークン`,
     cost_short: (jpy) => `約¥${jpy}`,
-    fields: { type: "種類", issuer: "発行元", date: "日付", amount: "金額", due: "期限", reference: "番号", categories: "分類", status: "状態", model: "モデル", ocr: "OCR", lang: "解釈の言語", cost: "費用" },
+    fields: { type: "種類", issuer: "発行元", date: "日付", amount: "金額", due: "期限", reference: "番号", categories: "分類", status: "状態", model: "モデル", ocr: "OCR", lang: "解釈の言語", cost: "費用", scanned_by: "スキャン者" },
     doctype: { tax_notice: "納税通知書", government_notice: "行政からの通知", utility_bill: "公共料金", insurance: "保険", bank_statement: "銀行明細", invoice: "請求書", receipt: "領収書", school_letter: "学校からのお知らせ", medical: "医療", contract: "契約", subscription: "定期契約", advertisement: "広告", other: "その他" },
     lang_name: { en: "English", ja: "日本語" },
+    spaces: "スペース", space: "スペース", your_spaces: "あなたのスペース", current: "現在", owner: "所有者", member: "メンバー",
+    members_n: (n) => `${n}人`, new_space: "新しいスペース", space_name_ph: "スペース名（例：田中家、自宅、事務所）",
+    create: "作成", settings: "設定", rename: "名前を変更", save: "保存", members: "メンバー", remove: "削除", leave: "スペースを退出",
+    confirm_leave: "このスペースを退出しますか？書類は見えなくなります。", confirm_remove: (n) => `${n} をこのスペースから削除しますか？`,
+    invites: "メンバーを招待", invite_hint: "リンクを知っている人は7日以内に参加できます（最大10人）。参加にはGoogleログインが必要です。",
+    create_invite: "招待リンクを作成", copy: "リンクをコピー", copied: "コピーしました", revoke: "無効化", expires: (d) => `有効期限 ${d}`, uses: (u, m) => `${u}/${m} 使用`,
+    where_files_go: (name) => `このスペースでスキャンした書類は、所有者のGoogleドライブ内「Paper Archive / ${name}」に保存されます。`,
+    join_title: "スペースに参加", join_desc: (space, by) => `<b>${esc(space)}</b> に招待されています${by ? `（${esc(by)} から）` : ""}。`,
+    join: "参加する", join_signin: "Googleでログインして参加", joined: (name) => `${name} に参加しました。`, invite_invalid: "この招待リンクは無効です。", invite_expired: "この招待リンクは期限切れか、使用回数の上限に達しています。",
+    switch_to: "切替",
   },
 };
 const t = (key, ...args) => { const v = STR[state.lang][key]; return typeof v === "function" ? v(...args) : v; };
@@ -95,6 +121,7 @@ function applyLang() {
   document.querySelectorAll(".tabs a").forEach((a) => { a.lastChild.textContent = t("tab_" + a.dataset.tab); });
   langBtn.textContent = state.lang === "en" ? "日本語" : "EN";
   langBtn.title = t("lang_name")[state.lang === "en" ? "ja" : "en"];
+  renderSpaceBtn();
 }
 langBtn.addEventListener("click", () => {
   state.lang = state.lang === "en" ? "ja" : "en";
@@ -121,15 +148,19 @@ async function api(path, opts = {}) {
   }
   return body;
 }
+const postJson = (path, data, method = "POST") => api(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 
 function canCall() { return state.signedIn || Boolean(state.token); }
 
 async function whoami() {
   try {
-    const { user } = await api("/api/me");
-    state.signedIn = true; state.user = user;
+    const { user, space } = await api("/api/me");
+    state.signedIn = true; state.user = user; state.space = space;
   } catch { state.signedIn = false; state.user = null; }
-  renderWho();
+  if (!state.signedIn && state.token) {
+    try { const { spaces, current } = await api("/api/spaces"); state.space = spaces.find((s) => s.id === current) || null; } catch { state.space = null; }
+  }
+  renderWho(); renderSpaceBtn();
 }
 
 function renderWho() {
@@ -137,6 +168,11 @@ function renderWho() {
     ? `<span>${esc(state.user.name || state.user.email)}</span><a href="/auth/logout">${t("signout")}</a>`
     : `<a class="signin" href="/auth/login">${t("signin")}</a>`;
 }
+function renderSpaceBtn() {
+  spaceBtn.hidden = !state.space;
+  if (state.space) spaceBtn.textContent = "⌂ " + state.space.name;
+}
+spaceBtn.addEventListener("click", () => { location.hash = "#/spaces"; });
 
 // ---------- router ----------
 
@@ -146,6 +182,9 @@ const routes = [
   [/^#\/actions$/, actionsView],
   [/^#\/search$/, searchView],
   [/^#\/doc\/([0-9a-f-]{36})$/, docView],
+  [/^#\/spaces$/, spacesView],
+  [/^#\/space\/([0-9a-f-]{36})$/, spaceView],
+  [/^#\/join\/([A-Za-z0-9_-]{20,64})$/, joinView],
 ];
 
 async function route() {
@@ -186,9 +225,10 @@ async function scanView() {
     <div id="result"></div>`;
   $("#scanBtn").addEventListener("click", () => fileInput.click());
   const tokenEl = $("#token");
-  if (tokenEl) tokenEl.addEventListener("change", () => {
+  if (tokenEl) tokenEl.addEventListener("change", async () => {
     state.token = tokenEl.value.trim();
     try { localStorage.setItem("pa_token", state.token); } catch {}
+    await whoami();
   });
   if (state.lastResult) $("#result").appendChild(resultCard(state.lastResult));
 }
@@ -203,8 +243,6 @@ fileInput.addEventListener("change", async (e) => {
 
 async function downscale(file) {
   if (file.type === "application/pdf") return { blob: file, type: "application/pdf" };
-  // Phone JPEGs are 3–8 MB; Claude takes ~5 MB per image and the Worker cannot
-  // resize. The canvas also turns iOS HEIC into JPEG, which the upstreams need.
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
   const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale);
@@ -243,7 +281,7 @@ async function process(file) {
 
 async function recentView() {
   if (gate()) return;
-  view.innerHTML = `<h2>${t("recent")}</h2><div id="list" class="empty">${t("loading")}</div>`;
+  view.innerHTML = `<h2>${t("recent")}${state.space ? ` · ${esc(state.space.name)}` : ""}</h2><div id="list" class="empty">${t("loading")}</div>`;
   await fillList("#list", "/api/recent", t("nothing_yet"));
 }
 
@@ -331,6 +369,145 @@ async function docView(id) {
   });
 }
 
+// ---------- spaces ----------
+
+async function spacesView() {
+  if (gate()) return;
+  view.innerHTML = `<h2>${t("your_spaces")}</h2><div id="list" class="empty">${t("loading")}</div>
+    <div class="card">
+      <h3>${t("new_space")}</h3>
+      <div class="search"><input id="newName" maxlength="60" placeholder="${esc(t("space_name_ph"))}"><button class="small" id="createBtn">${t("create")}</button></div>
+    </div>`;
+  const list = $("#list");
+  try {
+    const { current, spaces } = await api("/api/spaces");
+    list.className = ""; list.innerHTML = "";
+    for (const s of spaces) {
+      const el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = `<div class="row" style="justify-content:space-between">
+        <div><h3 style="display:inline">${esc(s.name)}</h3> <span class="pill">${s.role === "owner" ? t("owner") : t("member")}</span> ${s.id === current ? `<span class="pill warn">${t("current")}</span>` : ""}
+          <div class="meta">${t("members_n", s.member_count)}</div></div>
+        <div class="row">${s.id !== current ? `<button class="small" data-select="${s.id}">${t("switch_to")}</button>` : ""}<a class="small" href="#/space/${s.id}" style="text-decoration:none"><button class="small">${t("settings")}</button></a></div></div>`;
+      list.appendChild(el);
+    }
+    list.querySelectorAll("[data-select]").forEach((b) => b.addEventListener("click", async () => {
+      await api(`/api/spaces/${b.dataset.select}/select`, { method: "POST" });
+      await whoami(); state.lastResult = null; spacesView();
+    }));
+  } catch (err) { list.textContent = err.status === 503 ? t("no_db") : t("could_not_load", err.message); }
+  $("#createBtn").addEventListener("click", async () => {
+    const name = $("#newName").value.trim();
+    if (!name) return;
+    try { await postJson("/api/spaces", { name }); await whoami(); state.lastResult = null; spacesView(); }
+    catch (err) { alert(t("save_failed", err.message)); }
+  });
+}
+
+async function spaceView(id) {
+  if (gate()) return;
+  view.innerHTML = `<div class="empty">${t("loading")}</div>`;
+  let s, members, invites;
+  try {
+    const all = await api("/api/spaces");
+    s = all.spaces.find((x) => x.id === id);
+    if (!s) throw Object.assign(new Error("not found"), { status: 404 });
+    ({ members } = await api(`/api/spaces/${id}/members`));
+    ({ invites } = await api(`/api/spaces/${id}/invites`));
+  } catch (err) { view.innerHTML = `<div class="empty">${err.status === 404 ? t("not_found") : esc(err.message)}</div>`; return; }
+  const isOwner = s.role === "owner";
+  const meId = members.find((m) => m.role === "owner" && isOwner)?.user_id;
+
+  view.innerHTML = `
+    <div class="card">
+      <h3>${esc(s.name)} <span class="pill">${isOwner ? t("owner") : t("member")}</span></h3>
+      <div class="meta">${t("where_files_go", esc(s.name))}</div>
+      ${isOwner ? `<div class="search" style="margin-top:10px"><input id="rename" maxlength="60" value="${esc(s.name)}"><button class="small" id="renameBtn">${t("save")}</button></div>` : ""}
+    </div>
+    <div class="card">
+      <h3>${t("members")} · ${t("members_n", members.length)}</h3>
+      <div id="members"></div>
+      ${!isOwner ? `<div class="footer-actions"><span></span><button class="small danger" id="leave">${t("leave")}</button></div>` : ""}
+    </div>
+    <div class="card">
+      <h3>${t("invites")}</h3>
+      <div class="meta">${t("invite_hint")}</div>
+      <div id="invites"></div>
+      <div class="decide"><button id="mkInvite">${t("create_invite")}</button></div>
+    </div>`;
+
+  const ml = $("#members");
+  for (const m of members) {
+    const row = document.createElement("div"); row.className = "row"; row.style.justifyContent = "space-between"; row.style.padding = "6px 0";
+    const canRemove = isOwner && m.role !== "owner";
+    row.innerHTML = `<span>${esc(m.name || m.email)} <span class="meta">${esc(m.email)}</span> <span class="pill">${m.role === "owner" ? t("owner") : t("member")}</span></span>
+      ${canRemove ? `<button class="small danger" data-rm="${m.user_id}" data-name="${esc(m.name || m.email)}">${t("remove")}</button>` : ""}`;
+    ml.appendChild(row);
+  }
+  ml.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm(t("confirm_remove", b.dataset.name))) return;
+    try { await api(`/api/spaces/${id}/members/${b.dataset.rm}`, { method: "DELETE" }); spaceView(id); } catch (err) { alert(err.message); }
+  }));
+  const leave = $("#leave");
+  if (leave) leave.addEventListener("click", async () => {
+    if (!confirm(t("confirm_leave"))) return;
+    try {
+      const me = state.user ? members.find((m) => m.email === state.user.email) : null;
+      if (me) await api(`/api/spaces/${id}/members/${me.user_id}`, { method: "DELETE" });
+      await whoami(); location.hash = "#/spaces";
+    } catch (err) { alert(err.message); }
+  });
+  const rb = $("#renameBtn");
+  if (rb) rb.addEventListener("click", async () => {
+    const name = $("#rename").value.trim(); if (!name) return;
+    try { await postJson(`/api/spaces/${id}`, { name }, "PATCH"); await whoami(); spaceView(id); } catch (err) { alert(t("save_failed", err.message)); }
+  });
+
+  const il = $("#invites");
+  const renderInvites = () => {
+    il.innerHTML = "";
+    for (const inv of invites) {
+      const row = document.createElement("div"); row.className = "row"; row.style.justifyContent = "space-between"; row.style.padding = "6px 0";
+      row.innerHTML = `<span class="meta">${t("expires", inv.expires_at.slice(0, 10))} · ${t("uses", inv.uses, inv.max_uses)}</span>
+        <span class="row"><button class="small" data-copy="${esc(inv.url)}">${t("copy")}</button>${isOwner ? `<button class="small danger" data-revoke="${inv.id}">${t("revoke")}</button>` : ""}</span>`;
+      il.appendChild(row);
+    }
+    il.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = t("copied"); setTimeout(() => (b.textContent = t("copy")), 1500); }
+      catch { prompt("", b.dataset.copy); }
+    }));
+    il.querySelectorAll("[data-revoke]").forEach((b) => b.addEventListener("click", async () => {
+      try { await api(`/api/spaces/${id}/invites/${b.dataset.revoke}`, { method: "DELETE" }); invites = invites.filter((i) => i.id !== b.dataset.revoke); renderInvites(); } catch (err) { alert(err.message); }
+    }));
+  };
+  renderInvites();
+  $("#mkInvite").addEventListener("click", async () => {
+    try { const inv = await api(`/api/spaces/${id}/invites`, { method: "POST" }); invites.unshift({ id: "new-" + Date.now(), url: inv.url, expires_at: inv.expires_at, uses: 0, max_uses: 10 }); renderInvites(); }
+    catch (err) { alert(err.message); }
+  });
+}
+
+async function joinView(token) {
+  view.innerHTML = `<div class="empty">${t("loading")}</div>`;
+  let inv;
+  try { ({ invite: inv } = await api(`/api/invites/${token}`)); }
+  catch { view.innerHTML = `<div class="card"><h3>${t("join_title")}</h3><div class="notice">${t("invite_invalid")}</div></div>`; return; }
+  if (!inv.valid) { view.innerHTML = `<div class="card"><h3>${t("join_title")}</h3><div class="notice">${t("invite_expired")}</div></div>`; return; }
+  view.innerHTML = `<div class="card"><h3>${t("join_title")}</h3><p>${t("join_desc", inv.space_name, inv.inviter_name)}</p>
+    <div class="decide">${state.signedIn ? `<button id="joinBtn">${t("join")}</button>` : `<a class="signin" href="/auth/login" id="joinSignin">${t("join_signin")}</a>`}</div></div>`;
+  const jb = $("#joinBtn");
+  if (jb) jb.addEventListener("click", async () => {
+    try {
+      const { space } = await api(`/api/invites/${token}/accept`, { method: "POST" });
+      try { localStorage.removeItem("pa_pending_invite"); } catch {}
+      await whoami(); state.lastResult = null;
+      view.innerHTML = `<div class="card"><h3>${t("join_title")}</h3><p>${t("joined", esc(space.name))}</p><div class="decide"><a href="#/recent"><button>${t("tab_recent")}</button></a></div></div>`;
+    } catch (err) { view.querySelector(".card").insertAdjacentHTML("beforeend", `<div class="notice">${err.status === 410 ? t("invite_expired") : t("invite_invalid")}</div>`); }
+  });
+  const js = $("#joinSignin");
+  if (js) js.addEventListener("click", () => { try { localStorage.setItem("pa_pending_invite", token); } catch {} });
+}
+
 // ---------- cards ----------
 
 const retentionLabel = (r) => t("retention")[r] || esc(r || "");
@@ -382,8 +559,8 @@ function resultCard(data) {
   let drive = "";
   if (data.filed) drive = `<div class="drive">📁 <a href="${esc(data.filed.link)}" target="_blank" rel="noopener">${esc(data.filed.path)}</a></div>`;
   else if (data.filing_error === "reconnect_google") drive = `<div class="notice">${t("reconnect", "/auth/login")}</div>`;
+  else if (data.filing_error === "owner_no_drive") drive = `<div class="meta">${state.signedIn ? t("not_filed") : t("not_filed_self")}</div>`;
   else if (data.filing_error) drive = `<div class="notice">${t("filing_failed")}</div>`;
-  else if (!state.signedIn) drive = `<div class="meta">${t("not_filed")}</div>`;
   el.innerHTML = `
     <h3>${esc(x.title)}</h3>
     <div class="meta">${esc([tt("doctype", x.document_type), x.issuer, x.document_date, money].filter(Boolean).join(" · "))}</div>
@@ -408,14 +585,11 @@ function decideButtons(id) {
 }
 
 function wireDecide(root, id) {
-  root.querySelectorAll(".decide button").forEach((b) => b.addEventListener("click", async () => {
+  root.querySelectorAll(".decide button[data-r]").forEach((b) => b.addEventListener("click", async () => {
     const retention = b.dataset.r;
     b.disabled = true;
     try {
-      await api(`/api/documents/${id}/retention`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ retention, reason: state.lang === "ja" ? "ユーザーが決定" : "Decided by user" }),
-      });
+      await postJson(`/api/documents/${id}/retention`, { retention, reason: state.lang === "ja" ? "ユーザーが決定" : "Decided by user" }, "PATCH");
       const keep = root.querySelector("#keep") || root.querySelector(".keep");
       if (keep) keep.textContent = t("retention")[retention];
       const box = root.querySelector(".decide"); if (box) box.remove();
@@ -429,4 +603,14 @@ function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 applyLang();
-(async () => { await whoami(); await route(); })();
+(async () => {
+  // A pasted invite link is /join/<token>; turn it into the hash route.
+  const m = location.pathname.match(/^\/join\/([A-Za-z0-9_-]{20,64})$/);
+  if (m) { history.replaceState(null, "", "/"); location.hash = `#/join/${m[1]}`; }
+  await whoami();
+  // Came back from Google sign-in with an invite pending → finish joining.
+  let pending = null;
+  try { pending = localStorage.getItem("pa_pending_invite"); } catch {}
+  if (pending && state.signedIn) location.hash = `#/join/${pending}`;
+  await route();
+})();

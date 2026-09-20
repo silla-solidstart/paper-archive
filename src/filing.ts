@@ -1,13 +1,15 @@
 import type { Env } from "./types.ts";
 import type { UserRow } from "./db.ts";
 import type { Extraction } from "./extract.ts";
-import { ensureFolderPath, ensureRootFolder, uploadFile } from "./drive.ts";
+import { createFolder, ensureFolderPath, ensureRootFolder, folderExists, uploadFile } from "./drive.ts";
 import { userAccessToken } from "./oauth.ts";
 import { jpegToPdf } from "./pdf.ts";
+import { updateSpaceDriveFolder, type SpaceRow } from "./spaces.ts";
 
 /**
- * Filing: Paper Archive / YYYY / MM / YYYY-MM-DD_issuer_title.ext
- * Folders are for the human browsing Drive. Postgres is the real index.
+ * Filing: Paper Archive / <space name> / YYYY / MM / YYYY-MM-DD_issuer_title.ext
+ * in the SPACE OWNER's Drive, uploaded with the owner's grant. Folders are for
+ * the human browsing Drive. Postgres is the real index.
  */
 
 const EXT: Record<string, string> = {
@@ -37,14 +39,24 @@ export interface Filed {
   path: string;
 }
 
+/** The space's folder under the owner's root, recreated if the owner deleted it. */
+async function ensureSpaceFolder(env: Env, owner: UserRow, space: SpaceRow, token: string): Promise<string> {
+  if (space.drive_folder_id && (await folderExists(token, space.drive_folder_id))) return space.drive_folder_id;
+  const root = await ensureRootFolder(env, owner, token);
+  const id = await createFolder(token, space.name, root);
+  await updateSpaceDriveFolder(env, space.id, id);
+  return id;
+}
+
 export async function fileToDrive(
   env: Env,
-  user: UserRow,
+  owner: UserRow,
+  space: SpaceRow,
   bytes: ArrayBuffer,
   mimeType: string,
   x: Extraction,
 ): Promise<Filed> {
-  const token = await userAccessToken(env, user);
+  const token = await userAccessToken(env, owner);
   const today = new Date().toISOString().slice(0, 10);
 
   // Photos are filed as single-page PDFs with the JPEG embedded verbatim, so
@@ -60,14 +72,14 @@ export async function fileToDrive(
   const filename = buildFilename(x, uploadType, today);
   const [yyyy, mm] = (x.document_date ?? today).split("-");
 
-  const root = await ensureRootFolder(env, user, token);
-  const folder = await ensureFolderPath(token, root, [yyyy, mm]);
+  const spaceFolder = await ensureSpaceFolder(env, owner, space, token);
+  const folder = await ensureFolderPath(token, spaceFolder, [yyyy, mm]);
   const uploaded = await uploadFile(token, folder, filename, uploadType, payload);
 
   return {
     fileId: uploaded.id,
     filename: uploaded.name,
     link: uploaded.webViewLink,
-    path: `${yyyy}/${mm}/${filename}`,
+    path: `${space.name}/${yyyy}/${mm}/${filename}`,
   };
 }

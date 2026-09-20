@@ -2,7 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import type { Env } from "./types.ts";
-import { ensureLocalUser, getDocument, listActions, searchDocuments, updateDocumentRetention } from "./db.ts";
+import { ensureLocalUser, getDocument, getUserById, listActions, searchDocuments, updateDocumentRetention } from "./db.ts";
+import { currentSpace } from "./spaces.ts";
 import { RETENTION_STATUSES } from "./extract.ts";
 
 /**
@@ -21,7 +22,7 @@ const text = (body: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(body, null, 2) }],
 });
 
-function buildServer(env: Env, userId: string): McpServer {
+function buildServer(env: Env, spaceId: string): McpServer {
   const server = new McpServer({ name: "paper-archive", version: "0.1.0" });
 
   server.registerTool(
@@ -29,7 +30,7 @@ function buildServer(env: Env, userId: string): McpServer {
     {
       title: "Search documents",
       description:
-        "Search the user's scanned paperwork by keyword. Matches OCR text, title, " +
+        "Search the scanned paperwork in the current space by keyword. Matches OCR text, title, " +
         "issuer and summary. Works for Japanese and English. Returns metadata only; " +
         "use get_document for the full text.",
       inputSchema: {
@@ -37,7 +38,7 @@ function buildServer(env: Env, userId: string): McpServer {
         limit: z.number().int().min(1).max(50).optional(),
       },
     },
-    async ({ query, limit }) => text(await searchDocuments(env, userId, query, limit ?? 20)),
+    async ({ query, limit }) => text(await searchDocuments(env, spaceId, query, limit ?? 20)),
   );
 
   server.registerTool(
@@ -50,7 +51,7 @@ function buildServer(env: Env, userId: string): McpServer {
       inputSchema: { id: z.string().uuid() },
     },
     async ({ id }) => {
-      const doc = await getDocument(env, userId, id);
+      const doc = await getDocument(env, spaceId, id);
       return doc ? text(doc) : text({ error: "not found" });
     },
   );
@@ -64,7 +65,7 @@ function buildServer(env: Env, userId: string): McpServer {
         "appointments — ordered by deadline, soonest first.",
       inputSchema: { limit: z.number().int().min(1).max(100).optional() },
     },
-    async ({ limit }) => text(await listActions(env, userId, limit ?? 50)),
+    async ({ limit }) => text(await listActions(env, spaceId, limit ?? 50)),
   );
 
   server.registerTool(
@@ -82,7 +83,7 @@ function buildServer(env: Env, userId: string): McpServer {
       },
     },
     async ({ id, retention, reason }) => {
-      const ok = await updateDocumentRetention(env, userId, id, retention, reason ?? "Decided by user via assistant");
+      const ok = await updateDocumentRetention(env, spaceId, id, retention, reason ?? "Decided by user via assistant");
       return text(ok ? { ok: true, id, retention } : { error: "not found" });
     },
   );
@@ -91,8 +92,11 @@ function buildServer(env: Env, userId: string): McpServer {
 }
 
 export async function handleMcp(request: Request, env: Env): Promise<Response> {
+  // The bearer token is the "local" user; tools operate in that user's current space.
   const userId = await ensureLocalUser(env);
-  const server = buildServer(env, userId);
+  const user = (await getUserById(env, userId))!;
+  const space = await currentSpace(env, user);
+  const server = buildServer(env, space.id);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
     enableJsonResponse: true,

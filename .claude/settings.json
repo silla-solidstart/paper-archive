@@ -32,7 +32,9 @@
       "Bash(node scripts/:*)",
       "Bash(scripts/dev.sh:*)",
       "Bash(npm test)",
-      "Bash(node --test:*)"
+      "Bash(node --test:*)",
+      "Bash(node scripts/dashboard.ts:*)",
+      "Bash(npm run dashboard:*)"
     ],
     "deny": [
       "Bash(git push:*)",

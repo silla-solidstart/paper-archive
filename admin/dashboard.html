@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper Archive — Costs</title>
+<style>
+  /* Roles from the validated reference palette; light values on :root, dark under both scopes. */
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
+    --s1: #2a78d6; --s2: #eb6834;   /* categorical slots 1 (LLM) and 2 (OCR) */
+    --accent: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+      --s1: #3987e5; --s2: #d95926; --accent: #3987e5;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --accent: #3987e5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 24px 16px 48px; }
+  main { max-width: 1100px; margin: 0 auto; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+  h1 { font-size: 18px; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .filters { display: flex; gap: 6px; margin: 12px 0 20px; }
+  .filters button { font: inherit; padding: 6px 12px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); color: var(--ink-2); cursor: pointer; }
+  .filters button.on { color: var(--ink); font-weight: 600; border-color: var(--ink-2); }
+  .filters button.on::before { content: "✓ "; }
+  .hero { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+  .hero .label { color: var(--ink-2); }
+  .hero .value { font-size: 48px; font-weight: 600; line-height: 1.1; margin: 2px 0; }
+  .hero .secondary { color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 12px 16px; }
+  .tile .label { color: var(--ink-2); font-size: 13px; }
+  .tile .value { font-size: 22px; font-weight: 600; }
+  .tile .note { color: var(--muted); font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px; min-width: 0; }
+  .card.wide { grid-column: 1 / -1; }
+  .card h2 { font-size: 14px; margin: 0 0 2px; font-weight: 600; }
+  .card .desc { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--ink-2); margin: 4px 0 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .tbtn { font: inherit; font-size: 12px; padding: 4px 10px; border: 1px solid var(--ring); border-radius: 8px; background: transparent; color: var(--ink-2); cursor: pointer; white-space: nowrap; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  svg text { fill: var(--muted); font-size: 11px; }
+  svg .axis-label { fill: var(--ink-2); }
+  svg .grid line { stroke: var(--grid); stroke-width: 1; }
+  svg .baseline { stroke: var(--axis); stroke-width: 1; }
+  svg .mark { transition: opacity .1s; }
+  svg .hit { fill: transparent; }
+  svg .hit:hover + .mark, svg g:hover .mark { opacity: .85; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th { color: var(--ink-2); font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  .tablewrap { overflow-x: auto; }
+  .tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--ring); border-radius: 8px; padding: 6px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); display: none; z-index: 9; }
+  .tip b { font-weight: 600; }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+  .loading { opacity: .6; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>Paper Archive — what it costs</h1><div class="sub" id="sub">Loading…</div></div>
+    <div class="sub" id="meta"></div>
+  </header>
+
+  <div class="filters" id="filters">
+    <button data-days="7">Last 7 days</button>
+    <button data-days="30" class="on">Last 30 days</button>
+    <button data-days="90">Last 90 days</button>
+    <button data-days="all">All time</button>
+  </div>
+
+  <section class="hero" id="hero"></section>
+  <section class="tiles" id="tiles"></section>
+  <section class="grid" id="charts"></section>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+"use strict";
+// ?theme=dark|light stamps data-theme on the root (the viewer toggle the palette rules
+// support); handy for screenshots and for overriding the OS setting.
+{ const th = new URLSearchParams(location.search).get("theme"); if (th === "dark" || th === "light") document.documentElement.dataset.theme = th; }
+const $ = (s, el = document) => el.querySelector(s);
+let JPY = 150, days = "30", current = null;
+const fmtJpy = (usd, d = 0) => "¥" + (usd * JPY).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
+const fmtUsd = (usd) => "US$" + usd.toFixed(usd < 1 ? 3 : 2);
+const fmtN = (n) => Number(n).toLocaleString();
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+// ---------- tooltip (shared) ----------
+const tip = $("#tip");
+function showTip(html, x, y) { tip.innerHTML = html; tip.style.display = "block"; moveTip(x, y); }
+function moveTip(x, y) { const w = tip.offsetWidth, h = tip.offsetHeight; tip.style.left = Math.min(x + 14, innerWidth - w - 8) + "px"; tip.style.top = Math.max(8, y - h - 12) + "px"; }
+function hideTip() { tip.style.display = "none"; }
+function wireTips(svg) {
+  svg.querySelectorAll("[data-tip]").forEach((el) => {
+    el.addEventListener("mouseenter", (e) => showTip(el.dataset.tip, e.clientX, e.clientY));
+    el.addEventListener("mousemove", (e) => moveTip(e.clientX, e.clientY));
+    el.addEventListener("mouseleave", hideTip);
+    el.setAttribute("tabindex", "0");
+    el.addEventListener("focus", () => { const r = el.getBoundingClientRect(); showTip(el.dataset.tip, r.left + r.width / 2, r.top); });
+    el.addEventListener("blur", hideTip);
+  });
+}
+
+// ---------- chart primitives (inline SVG, mark specs from the method) ----------
+const BAR_MAX = 24, R = 4, GAP = 2;
+function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
+function ticks(max, n = 4) { const out = []; for (let i = 0; i <= n; i++) out.push((max / n) * i); return out; }
+// rounded top, square base; height may be 0
+function topRoundedRect(x, y, w, h, r) {
+  if (h <= 0) return ""; r = Math.min(r, w / 2, h);
+  return `M${x},${y + h} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h} Z`;
+}
+function rightRoundedRect(x, y, w, h, r) {
+  if (w <= 0) return ""; r = Math.min(r, h / 2, w);
+  return `M${x},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h - r} Q${x + w},${y + h} ${x + w - r},${y + h} H${x} Z`;
+}
+
+/** Stacked columns, two series (slot 1 + slot 2), 2px surface gap between segments. */
+function stackedColumns(rows, keys, labels, colors, tipFn) {
+  const W = 640, H = 220, padL = 44, padR = 8, padT = 10, padB = 28;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const totals = rows.map((r) => keys.reduce((a, k) => a + (r[k] || 0), 0));
+  const max = niceMax(Math.max(...totals, 0) * JPY);
+  const slot = iw / Math.max(rows.length, 1), bw = Math.min(BAR_MAX, slot * 0.7), x0 = (slot - bw) / 2;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(labels.join(" and "))} per day">`;
+  s += `<g class="grid">` + ticks(max).map((t) => { const y = padT + ih - (t / max) * ih; return `<line x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}"/><text x="${padL - 6}" y="${y + 4}" text-anchor="end">${fmtJpy(t / JPY)}</text>`; }).join("") + `</g>`;
+  rows.forEach((r, i) => {
+    const x = padL + i * slot + x0;
+    let yTop = padT + ih;
+    const segs = keys.map((k, ki) => { const v = (r[k] || 0) * JPY; const h = (v / max) * ih; yTop -= h; return { k, ki, v, h, y: yTop }; });
+    s += `<g data-tip="${esc(tipFn(r))}">`;
+    s += `<rect class="hit" x="${padL + i * slot}" y="${padT}" width="${slot}" height="${ih}"/>`;
+    // bottom segment square-based; the top segment carries the 4px rounding; a 2px surface gap between
+    segs.forEach((sg, idx) => {
+      if (sg.h <= 0) return;
+      const isTop = idx === segs.length - 1 || segs.slice(idx + 1).every((o) => o.h <= 0);
+      const gapAbove = isTop ? 0 : GAP;
+      const h = Math.max(0, sg.h - gapAbove);
+      s += isTop ? `<path class="mark" fill="${colors[sg.ki]}" d="${topRoundedRect(x, sg.y, bw, h, R)}"/>`
+                 : `<rect class="mark" fill="${colors[sg.ki]}" x="${x}" y="${sg.y + gapAbove}" width="${bw}" height="${h}"/>`;
+    });
+    s += `</g>`;
+    const every = Math.max(1, Math.ceil(rows.length / 10));
+    if (i % every === 0 || i === rows.length - 1) s += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${esc(r.day.slice(5))}</text>`;
+  });
+  s += `<line class="baseline" x1="${padL}" x2="${W - padR}" y1="${padT + ih}" y2="${padT + ih}"/></svg>`;
+  return s;
+}
+
+/** Horizontal bars, one series (slot 1), value at the tip. */
+function hbars(rows, labelKey, valueKey, fmt, tipFn) {
+  const rowH = 30, W = 640, padL = 150, padR = 90, H = rows.length * rowH + 8;
+  const max = niceMax(Math.max(...rows.map((r) => r[valueKey]), 0));
+  const iw = W - padL - padR;
+  let s = `<svg viewBox="0 0 ${W} ${Math.max(H, 40)}" role="img">`;
+  rows.forEach((r, i) => {
+    const y = 4 + i * rowH + (rowH - BAR_MAX) / 2, w = (r[valueKey] / max) * iw;
+    s += `<g data-tip="${esc(tipFn(r))}"><rect class="hit" x="0" y="${4 + i * rowH}" width="${W}" height="${rowH}"/>`;
+    s += `<text class="axis-label" x="${padL - 10}" y="${y + BAR_MAX / 2 + 4}" text-anchor="end">${esc(String(r[labelKey]).slice(0, 22))}</text>`;
+    s += `<path class="mark" fill="var(--s1)" d="${rightRoundedRect(padL, y, Math.max(w, 0), BAR_MAX, R)}"/>`;
+    s += `<text x="${padL + w + 8}" y="${y + BAR_MAX / 2 + 4}">${esc(fmt(r[valueKey]))}</text></g>`;
+  });
+  s += `<line class="baseline" x1="${padL}" x2="${padL}" y1="0" y2="${H}"/></svg>`;
+  return s;
+}
+
+/** Histogram of cost per scan, one series (slot 1). */
+function histogram(values) {
+  const jpy = values.map((v) => v * JPY);
+  if (!jpy.length) return `<div class="empty">No completed scans in this range.</div>`;
+  const max = niceMax(Math.max(...jpy)), bins = 12, bw = max / bins, counts = new Array(bins).fill(0);
+  jpy.forEach((v) => counts[Math.min(bins - 1, Math.floor(v / bw))]++);
+  const W = 640, H = 200, padL = 36, padR = 8, padT = 10, padB = 28, iw = W - padL - padR, ih = H - padT - padB;
+  const cmax = niceMax(Math.max(...counts)), slot = iw / bins, w = Math.min(BAR_MAX, slot - GAP);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Distribution of cost per scan">`;
+  s += `<g class="grid">` + ticks(cmax).map((t) => { const y = padT + ih - (t / cmax) * ih; return `<line x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}"/><text x="${padL - 6}" y="${y + 4}" text-anchor="end">${fmtN(t)}</text>`; }).join("") + `</g>`;
+  counts.forEach((c, i) => {
+    const x = padL + i * slot + (slot - w) / 2, h = (c / cmax) * ih, y = padT + ih - h;
+    const lo = i * bw, hi = (i + 1) * bw;
+    s += `<g data-tip="<b>¥${lo.toFixed(1)}–¥${hi.toFixed(1)}</b><br>${c} scan${c === 1 ? "" : "s"}"><rect class="hit" x="${padL + i * slot}" y="${padT}" width="${slot}" height="${ih}"/>`;
+    s += `<path class="mark" fill="var(--s1)" d="${topRoundedRect(x, y, w, h, R)}"/></g>`;
+    if (i % 3 === 0) s += `<text x="${padL + i * slot}" y="${H - 8}">¥${lo.toFixed(0)}</text>`;
+  });
+  s += `<line class="baseline" x1="${padL}" x2="${W - padR}" y1="${padT + ih}" y2="${padT + ih}"/></svg>`;
+  return s;
+}
+
+function table(cols, rows) {
+  return `<div class="tablewrap"><table><thead><tr>${cols.map((c) => `<th class="${c.num ? "num" : ""}">${esc(c.h)}</th>`).join("")}</tr></thead><tbody>` +
+    rows.map((r) => `<tr>${cols.map((c) => `<td class="${c.num ? "num" : ""}">${esc(c.f ? c.f(r[c.k], r) : r[c.k])}</td>`).join("")}</tr>`).join("") + `</tbody></table></div>`;
+}
+
+function card(id, title, desc, chartHtml, tableHtml, legend = "", wide = false) {
+  return `<div class="card ${wide ? "wide" : ""}" id="${id}">
+    <div class="card-head"><div><h2>${esc(title)}</h2><div class="desc">${esc(desc)}</div></div><button class="tbtn" data-toggle="${id}">Table</button></div>
+    ${legend}<div class="chart">${chartHtml}</div><div class="table" hidden>${tableHtml}</div></div>`;
+}
+
+// ---------- render ----------
+async function load() {
+  $("main").classList.add("loading");
+  const d = await (await fetch(`/data?days=${days}`)).json();
+  $("main").classList.remove("loading");
+  current = d; JPY = d.jpy_per_usd;
+  const t = d.totals;
+  const range = d.days ? `last ${d.days} days` : "all time";
+  $("#sub").textContent = `${range} · ${fmtN(t.attempts)} scan attempts · ${t.users} user${t.users === 1 ? "" : "s"} · ${t.spaces} space${t.spaces === 1 ? "" : "s"}`;
+  $("#meta").textContent = `prices as of ${d.pricing_as_of} · ¥${JPY}/US$ · refreshed ${new Date(d.generated_at).toLocaleTimeString()}`;
+
+  $("#hero").innerHTML = `<div class="label">Total spend, ${range}</div><div class="value">${fmtJpy(t.total_usd)}</div>
+    <div class="secondary">${fmtUsd(t.total_usd)} · OCR ${fmtJpy(t.ocr_usd)} + LLM ${fmtJpy(t.llm_usd)}</div>`;
+
+  const failRate = t.attempts ? (t.failed / t.attempts * 100) : 0;
+  $("#tiles").innerHTML = [
+    ["Cost per scan (avg)", fmtJpy(t.avg_usd, 1), fmtUsd(t.avg_usd)],
+    ["Median · p95", `${fmtJpy(t.p50_usd, 1)} · ${fmtJpy(t.p95_usd, 1)}`, "completed scans"],
+    ["Completed", fmtN(t.completed), `${fmtN(t.failed)} failed (${failRate.toFixed(0)}%)`],
+    ["Tokens per scan", fmtN(Math.round(t.avg_tokens)), "input + output"],
+    ["Time per scan", `${(t.avg_duration_ms / 1000).toFixed(1)} s`, "OCR + LLM + index"],
+  ].map(([l, v, n]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
+
+  const legend = `<div class="legend"><span><i style="background:var(--s1)"></i>LLM (Claude)</span><span><i style="background:var(--s2)"></i>OCR (Document AI)</span></div>`;
+  const dailyChart = d.daily.length ? stackedColumns(d.daily, ["llm_usd", "ocr_usd"], ["LLM", "OCR"], ["var(--s1)", "var(--s2)"],
+      (r) => `<b>${r.day}</b><br>LLM ${fmtJpy(r.llm_usd, 1)} · OCR ${fmtJpy(r.ocr_usd, 1)}<br>${r.attempts} attempt${r.attempts === 1 ? "" : "s"}${r.failed ? `, ${r.failed} failed` : ""}`)
+    : `<div class="empty">No scans in this range.</div>`;
+  const dailyTable = table([{ h: "Day", k: "day" }, { h: "LLM", k: "llm_usd", num: 1, f: (v) => fmtJpy(v, 1) }, { h: "OCR", k: "ocr_usd", num: 1, f: (v) => fmtJpy(v, 1) }, { h: "Attempts", k: "attempts", num: 1 }, { h: "Failed", k: "failed", num: 1 }], d.daily);
+
+  $("#charts").innerHTML = [
+    card("daily", "Spend per day", "Stacked: what the model cost and what OCR cost. OCR is the thin slice.", dailyChart, dailyTable, legend, true),
+    card("dist", "Cost per scan", "How much each completed scan cost. A wide spread means document size varies; a long tail means big PDFs.", histogram(d.per_scan.map((r) => r.usd)),
+      table([{ h: "Cost", k: "usd", num: 1, f: (v) => fmtJpy(v, 2) }, { h: "Type", k: "mime_type" }, { h: "Pages", k: "ocr_pages", num: 1 }, { h: "In", k: "input_tokens", num: 1 }, { h: "Out", k: "output_tokens", num: 1 }], d.per_scan.slice(0, 200))),
+    card("model", "By model", "Average cost per scan. Switching models is the second-biggest lever after image size.", hbars(d.by_model, "model", "avg_usd", (v) => fmtJpy(v, 1), (r) => `<b>${esc(r.model)}</b><br>${r.scans} scans · avg ${fmtJpy(r.avg_usd, 1)} · total ${fmtJpy(r.total_usd)}`),
+      table([{ h: "Model", k: "model" }, { h: "Scans", k: "scans", num: 1 }, { h: "Avg", k: "avg_usd", num: 1, f: (v) => fmtJpy(v, 1) }, { h: "Total", k: "total_usd", num: 1, f: (v) => fmtJpy(v) }], d.by_model)),
+    card("space", "By space", "Total spend per space — the unit you would bill.", hbars(d.by_space, "space", "total_usd", (v) => fmtJpy(v), (r) => `<b>${esc(r.space)}</b><br>${r.scans} scans · total ${fmtJpy(r.total_usd)} · avg ${fmtJpy(r.avg_usd, 1)}`),
+      table([{ h: "Space", k: "space" }, { h: "Scans", k: "scans", num: 1 }, { h: "Total", k: "total_usd", num: 1, f: (v) => fmtJpy(v) }, { h: "Avg", k: "avg_usd", num: 1, f: (v) => fmtJpy(v, 1) }], d.by_space)),
+    card("user", "By user", "Who is scanning.", hbars(d.by_user, "user", "total_usd", (v) => fmtJpy(v), (r) => `<b>${esc(r.user)}</b><br>${r.scans} scans · ${fmtJpy(r.total_usd)}`),
+      table([{ h: "User", k: "user" }, { h: "Scans", k: "scans", num: 1 }, { h: "Total", k: "total_usd", num: 1, f: (v) => fmtJpy(v) }], d.by_user)),
+    card("recent", "Recent attempts", "The ledger, newest first. Failed rows still cost OCR.", "",
+      table([{ h: "At", k: "at" }, { h: "Status", k: "status", f: (v, r) => v + (r.stage ? ` (${r.stage})` : "") }, { h: "Space", k: "space" }, { h: "Type", k: "mime_type" }, { h: "Pages", k: "ocr_pages", num: 1 }, { h: "In", k: "input_tokens", num: 1 }, { h: "Out", k: "output_tokens", num: 1 }, { h: "Cost", k: "usd", num: 1, f: (v) => fmtJpy(v, 2) }, { h: "ms", k: "duration_ms", num: 1 }], d.recent), "", true),
+  ].join("");
+
+  // the ledger card is table-only
+  const rc = $("#recent"); rc.querySelector(".chart").remove(); rc.querySelector(".table").hidden = false; rc.querySelector(".tbtn").remove();
+
+  document.querySelectorAll("svg").forEach(wireTips);
+  document.querySelectorAll("[data-toggle]").forEach((b) => b.addEventListener("click", () => {
+    const c = $("#" + b.dataset.toggle), tbl = c.querySelector(".table"), ch = c.querySelector(".chart");
+    const showTable = tbl.hidden; tbl.hidden = !showTable; ch.hidden = showTable; b.textContent = showTable ? "Chart" : "Table";
+  }));
+}
+
+$("#filters").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll("#filters button").forEach((x) => x.classList.toggle("on", x === b));
+  days = b.dataset.days; load();
+});
+load();
+</script>
+</body>
+</html>

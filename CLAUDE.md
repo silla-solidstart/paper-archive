@@ -65,6 +65,23 @@ but the Drive upload fails, the document is indexed with `status = failed` and
 the only recovery is a re-scan. The UI says so. When Workflows arrive, add R2
 as the staging store and this becomes a real retry.
 
+## Spaces (decided 2026-09-20)
+
+A **space** is the unit of sharing; every document belongs to exactly one.
+Users belong to any number and have a current one (`users.current_space_id`);
+all reads and writes scope by `space_id`. `documents.user_id` means "scanned by".
+
+**Files live in the space owner's Google Drive**, under
+`Paper Archive / <space name> / YYYY / MM /`, uploaded with the owner's grant
+whoever scanned — so a space really is a folder, members never choose where
+files go, and the owner is the only person whose Drive connection matters. If
+the owner's grant lapses, scans still index; filing reports `reconnect_google`
+and the owner re-signs in. Ownership transfer is not built yet.
+
+Invites are capability links (`/join/<token>`, 7 days, up to 10 uses, revocable
+by the owner). Accepting requires Google sign-in. The preview endpoint is
+public by design: the join page shows what you are joining before sign-in.
+
 ## Languages
 
 The UI is EN / 日本語 (toggle in the header, auto-detected from the browser,
@@ -79,7 +96,9 @@ language is stored per document (`documents.lang`).
 Every scan attempt writes a row to `scan_costs` (migration 0003) — including
 attempts that fail after OCR, because OCR was still paid for — and the row
 survives document and user deletion. `GET /api/costs` summarises it (the
-bearer token sees platform-wide; a session user sees their own). Prices live
+bearer token sees platform-wide; a session user sees their own). The admin
+dashboard (`npm run dashboard`, localhost only, reads Neon directly) is the
+operator view; it never needs deploying. Prices live
 in `src/pricing.ts`, dated; check them when `PRICING_AS_OF` is stale. See
 `docs/costs.md` for the pricing model.
 

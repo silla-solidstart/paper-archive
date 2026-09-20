@@ -11,6 +11,7 @@ import { ExtractionSchema, RETENTION_STATUSES, DOCUMENT_TYPES } from "../src/ext
 import { base64url, pemToPkcs8 } from "../src/google-auth.ts";
 import { sign, verify, encrypt, decrypt, readSession, createSessionCookie } from "../src/session.ts";
 import { isRetryable, UpstreamError, withRetry } from "../src/retry.ts";
+import { cleanName, newInviteToken } from "../src/spaces.ts";
 import type { Env } from "../src/types.ts";
 
 const env = { SESSION_SECRET: "test-secret-not-real" } as Env;
@@ -119,4 +120,19 @@ test("retry: retries 429/5xx and network errors, not 4xx", async () => {
     withRetry("t", async () => { calls++; throw new UpstreamError("x", 400, "no"); }, { attempts: 3, baseMs: 1 }),
   );
   assert.equal(calls, 1);
+});
+
+test("spaces: cleanName trims, collapses whitespace, strips control chars, bounds length", () => {
+  assert.equal(cleanName("  田中家   "), "田中家");
+  assert.equal(cleanName("Fam\u0007ily   Office"), "Family Office");
+  assert.equal(cleanName("   "), null);
+  assert.equal(cleanName(null), null);
+  assert.equal(cleanName("x".repeat(61)), null);
+  assert.equal(cleanName("x".repeat(60)), "x".repeat(60));
+});
+
+test("spaces: invite tokens are url-safe, 32 chars, and unique", () => {
+  const a = newInviteToken(), b = newInviteToken();
+  assert.match(a, /^[A-Za-z0-9_-]{32}$/);
+  assert.notEqual(a, b);
 });

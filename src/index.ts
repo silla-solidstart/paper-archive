@@ -25,6 +25,11 @@ import { estimateCost, PRICING_AS_OF } from "./pricing.ts";
 import { callback, login, logout, ReconnectRequired } from "./oauth.ts";
 import { readSession } from "./session.ts";
 import { fileToDrive, type Filed } from "./filing.ts";
+import {
+  acceptInvite, cleanName, createInvite, createSpace, getInvite, getSpaceForUser, listInvites, listMembers,
+  listSpaces, removeMember, renameSpace, revokeInvite, setCurrentSpace, currentSpace, spaceOwner,
+  type SpaceWithRole,
+} from "./spaces.ts";
 import { trashFile } from "./drive.ts";
 import { userAccessToken } from "./oauth.ts";
 
@@ -46,6 +51,12 @@ import { userAccessToken } from "./oauth.ts";
  *   GET  /api/documents/:id
  *   DELETE /api/documents/:id            removes the index row; trashes the Drive file
  *   PATCH /api/documents/:id/retention   { retention, reason? } — the human's call
+ *   Spaces (all scoped to the caller's current space):
+ *   GET  /api/spaces · POST /api/spaces {name} · POST /api/spaces/:id/select
+ *   PATCH /api/spaces/:id {name} (owner) · GET /api/spaces/:id/members
+ *   DELETE /api/spaces/:id/members/:userId (owner, or self)
+ *   GET|POST /api/spaces/:id/invites · DELETE /api/spaces/:id/invites/:inviteId
+ *   GET  /api/invites/:token (public preview) · POST /api/invites/:token/accept (session)
  *   GET  /api/costs     unit economics from the scan_costs ledger (bearer = platform-wide)
  *   GET  /api/status    which credentials are configured
  *   *    /mcp           search_documents / get_document / list_actions /
@@ -80,6 +91,13 @@ const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
 
 interface Caller {
   user: UserRow | null; // null = bearer-token "local" caller
+}
+
+/** The caller as a users row (the bearer caller is the "local" user) and their current space. */
+async function callerContext(env: Env, caller: Caller): Promise<{ user: UserRow; space: SpaceWithRole }> {
+  const user = caller.user ?? (await getUserById(env, await ensureLocalUser(env)))!;
+  const space = await currentSpace(env, user);
+  return { user, space };
 }
 
 /** Session cookie first, then bearer token. Returns a Response to short-circuit. */
@@ -117,6 +135,14 @@ export default {
       return handleMcp(request, env);
     }
 
+    // Public: the join page needs to show what it is joining before sign-in.
+    const invitePreview = path.match(/^\/api\/invites\/([A-Za-z0-9_-]{20,64})$/);
+    if (invitePreview && request.method === "GET") {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      const inv = await getInvite(env, invitePreview[1]);
+      return inv ? json({ invite: inv }) : json({ error: "not found" }, 404);
+    }
+
     if (!path.startsWith("/api/")) return json({ error: "not found" }, 404);
 
     const caller = await resolveCaller(request, env);
@@ -125,7 +151,73 @@ export default {
     if (path === "/api/me") {
       if (!caller.user) return json({ error: "not signed in" }, 401);
       const { email, name, drive_folder_id } = caller.user;
-      return json({ user: { email, name, drive_folder_id } });
+      const space = hasDatabase(env) ? await currentSpace(env, caller.user) : null;
+      return json({ user: { email, name, drive_folder_id }, space: space && { id: space.id, name: space.name, role: space.role } });
+    }
+
+    // ----- spaces -----
+    if (path === "/api/spaces" || path.startsWith("/api/spaces/")) {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      const { user, space: current } = await callerContext(env, caller);
+
+      if (path === "/api/spaces" && request.method === "GET") {
+        return json({ current: current.id, spaces: await listSpaces(env, user.id) });
+      }
+      if (path === "/api/spaces" && request.method === "POST") {
+        const body = (await request.json().catch(() => null)) as { name?: unknown } | null;
+        const name = cleanName(body?.name);
+        if (!name) return json({ error: "name required (1-60 chars)" }, 400);
+        const created = await createSpace(env, user.id, name);
+        return json({ space: { ...created, role: "owner", member_count: 1 } }, 201);
+      }
+
+      const m = path.match(/^\/api\/spaces\/([0-9a-f-]{36})(?:\/(select|members|invites)(?:\/([0-9A-Za-z_-]+))?)?$/);
+      if (!m) return json({ error: "not found" }, 404);
+      const space = await getSpaceForUser(env, m[1], user.id);
+      if (!space) return json({ error: "not found" }, 404);
+      const sub = m[2], subId = m[3];
+      const isOwner = space.role === "owner";
+
+      if (!sub && request.method === "PATCH") {
+        if (!isOwner) return json({ error: "owner only" }, 403);
+        const body = (await request.json().catch(() => null)) as { name?: unknown } | null;
+        const name = cleanName(body?.name);
+        if (!name) return json({ error: "name required (1-60 chars)" }, 400);
+        await renameSpace(env, space.id, user.id, name);
+        return json({ ok: true, id: space.id, name });
+      }
+      if (sub === "select" && request.method === "POST") {
+        await setCurrentSpace(env, user.id, space.id);
+        return json({ ok: true, current: space.id });
+      }
+      if (sub === "members" && !subId && request.method === "GET") {
+        return json({ members: await listMembers(env, space.id) });
+      }
+      if (sub === "members" && subId && request.method === "DELETE") {
+        const r = await removeMember(env, space.id, user.id, subId);
+        return r === "ok" ? json({ ok: true }) : json({ error: r }, r === "forbidden" ? 403 : 404);
+      }
+      if (sub === "invites" && !subId && request.method === "GET") {
+        const invites = await listInvites(env, space.id);
+        return json({ invites: invites.map((i) => ({ ...i, url: `${url.origin}/join/${i.token}` })) });
+      }
+      if (sub === "invites" && !subId && request.method === "POST") {
+        const inv = await createInvite(env, space.id, user.id);
+        return json({ token: inv.token, expires_at: inv.expires_at, url: `${url.origin}/join/${inv.token}` }, 201);
+      }
+      if (sub === "invites" && subId && request.method === "DELETE") {
+        if (!isOwner) return json({ error: "owner only" }, 403);
+        return (await revokeInvite(env, space.id, subId)) ? json({ ok: true }) : json({ error: "not found" }, 404);
+      }
+      return json({ error: "method not allowed" }, 405);
+    }
+
+    const acceptM = path.match(/^\/api\/invites\/([A-Za-z0-9_-]{20,64})\/accept$/);
+    if (acceptM && request.method === "POST") {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      if (!caller.user) return json({ error: "sign in to join a space" }, 401);
+      const r = await acceptInvite(env, acceptM[1], caller.user.id);
+      return "error" in r ? json({ error: r.error }, r.error === "expired" ? 410 : 404) : json({ space: r.space });
     }
 
     if (path === "/api/status") {
@@ -145,8 +237,8 @@ export default {
 
     if (path === "/api/recent") {
       if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
-      const userId = caller.user?.id ?? (await ensureLocalUser(env));
-      return json({ documents: await listRecent(env, userId) });
+      const { space } = await callerContext(env, caller);
+      return json({ space: { id: space.id, name: space.name }, documents: await listRecent(env, space.id) });
     }
 
     if (path === "/api/costs") {
@@ -157,8 +249,8 @@ export default {
 
     if (path === "/api/actions") {
       if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
-      const userId = caller.user?.id ?? (await ensureLocalUser(env));
-      return json({ documents: await listActions(env, userId) });
+      const { space } = await callerContext(env, caller);
+      return json({ documents: await listActions(env, space.id) });
     }
 
     if (path === "/api/search") {
@@ -166,18 +258,19 @@ export default {
       const q = (url.searchParams.get("q") ?? "").trim();
       if (!q) return json({ documents: [] });
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") ?? 20) || 20));
-      const userId = caller.user?.id ?? (await ensureLocalUser(env));
-      return json({ documents: await searchDocuments(env, userId, q.slice(0, 200), limit) });
+      const { space } = await callerContext(env, caller);
+      return json({ documents: await searchDocuments(env, space.id, q.slice(0, 200), limit) });
     }
 
     const doc = path.match(/^\/api\/documents\/([0-9a-f-]{36})(\/retention)?$/);
     if (doc) {
       if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
-      const userId = caller.user?.id ?? (await ensureLocalUser(env));
+      const { space } = await callerContext(env, caller);
+      const spaceId = space.id;
       const id = doc[1];
 
       if (!doc[2] && request.method === "GET") {
-        const row = await getDocument(env, userId, id);
+        const row = await getDocument(env, spaceId, id);
         return row ? json({ document: row }) : json({ error: "not found" }, 404);
       }
 
@@ -187,18 +280,20 @@ export default {
         if (!retention || !(RETENTION_STATUSES as readonly string[]).includes(retention)) {
           return json({ error: "invalid retention", allowed: RETENTION_STATUSES }, 400);
         }
-        const ok = await updateDocumentRetention(env, userId, id, retention, body?.reason?.slice(0, 500) || "Decided by user");
+        const ok = await updateDocumentRetention(env, spaceId, id, retention, body?.reason?.slice(0, 500) || "Decided by user");
         return ok ? json({ ok: true, id, retention }) : json({ error: "not found" }, 404);
       }
       if (!doc[2] && request.method === "DELETE") {
-        const removed = await deleteDocument(env, userId, id);
+        const removed = await deleteDocument(env, spaceId, id);
         if (!removed) return json({ error: "not found" }, 404);
         // Best effort: the index row is already gone; a Drive failure here
-        // leaves a stray file in the user's trash-able folder, not a broken app.
+        // leaves a stray file in the owner's folder, not a broken app. The file
+        // is in the space OWNER's Drive, so it is their grant that trashes it.
         let driveTrashed = false;
-        if (removed.drive_file_id && caller.user) {
+        const owner = removed.drive_file_id ? await spaceOwner(env, space) : null;
+        if (removed.drive_file_id && owner?.google_refresh_token_enc) {
           try {
-            await trashFile(await userAccessToken(env, caller.user), removed.drive_file_id);
+            await trashFile(await userAccessToken(env, owner), removed.drive_file_id);
             driveTrashed = true;
           } catch (err) {
             console.error(`[${rid}] trash failed:`, err);
@@ -238,6 +333,7 @@ export default {
       let stage: "ocr" | "extraction" | "index" | "filing" = "ocr";
       const started = Date.now();
       let ocrPages = 0;
+      let spaceId: string | null = null;
       const langForLedger = requestLang(request);
       try {
         const result = await ocr(env, bytes, mimeType);
@@ -255,18 +351,22 @@ export default {
         // endpoint still works as a pure OCR+extract tester.
         let id: string | null = null;
         let filed: Filed | null = null;
-        let filingError: "reconnect_google" | "failed" | null = null;
+        let filingError: "reconnect_google" | "owner_no_drive" | "failed" | null = null;
 
         if (hasDatabase(env)) {
           stage = "index";
-          const ledgerUser = caller.user?.id ?? (await ensureLocalUser(env));
+          const ctx = await callerContext(env, caller);
+          const ledgerUser = ctx.user.id;
+          spaceId = ctx.space.id;
           const filename = decodeURIComponent(request.headers.get("X-Filename") ?? "") || null;
 
-          if (caller.user) {
-            id = await insertDocument(env, caller.user.id, filename, result, extraction, model, "filing", meta);
+          // Files go to the SPACE OWNER's Drive with the owner's grant, whoever scanned.
+          const owner = await spaceOwner(env, ctx.space);
+          if (owner?.google_refresh_token_enc) {
+            id = await insertDocument(env, ctx.space.id, ledgerUser, filename, result, extraction, model, "filing", meta);
             stage = "filing";
             try {
-              filed = await fileToDrive(env, caller.user, bytes, mimeType, extraction);
+              filed = await fileToDrive(env, owner, ctx.space, bytes, mimeType, extraction);
               await updateDocumentFiling(env, id, {
                 driveFileId: filed.fileId,
                 filename: filed.filename,
@@ -286,11 +386,12 @@ export default {
               });
             }
           } else {
-            id = await insertDocument(env, ledgerUser, filename, result, extraction, model, "complete", meta);
+            id = await insertDocument(env, ctx.space.id, ledgerUser, filename, result, extraction, model, "complete", meta);
+            filingError = "owner_no_drive";
           }
 
           await recordScanCost(env, {
-            userId: ledgerUser, documentId: id, status: "complete", stage: null, lang,
+            userId: ledgerUser, spaceId, documentId: id, status: "complete", stage: null, lang,
             mimeType, bytes: bytes.byteLength, ocrPages: result.pageCount, model,
             inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
             cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens,
@@ -301,6 +402,7 @@ export default {
 
         return json({
           id,
+          space_id: spaceId,
           lang,
           cost,
           filed,
@@ -323,7 +425,7 @@ export default {
           try {
             const c = estimateCost("claude-opus-5", { pages: ocrPages, inputTokens: 0, outputTokens: 0 });
             await recordScanCost(env, {
-              userId: caller.user?.id ?? (await ensureLocalUser(env)), documentId: null,
+              userId: caller.user?.id ?? (await ensureLocalUser(env)), spaceId, documentId: null,
               status: "failed", stage, lang: langForLedger, mimeType, bytes: bytes.byteLength,
               ocrPages, model: null, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
               ocrUsd: c.ocr_usd, llmUsd: 0, totalUsd: c.ocr_usd, pricingAsOf: c.pricing_as_of,

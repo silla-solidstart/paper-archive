@@ -34,7 +34,7 @@ export async function trashFile(token: string, id: string): Promise<void> {
   });
 }
 
-async function createFolder(token: string, name: string, parentId?: string): Promise<string> {
+export async function createFolder(token: string, name: string, parentId?: string): Promise<string> {
   const res = await driveFetch(token, `${API}/files?fields=id`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -43,7 +43,7 @@ async function createFolder(token: string, name: string, parentId?: string): Pro
   return ((await res.json()) as { id: string }).id;
 }
 
-async function findChildFolder(token: string, parentId: string, name: string): Promise<string | null> {
+export async function findChildFolder(token: string, parentId: string, name: string): Promise<string | null> {
   const escaped = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   const q = `'${parentId}' in parents and name = '${escaped}' and mimeType = '${FOLDER}' and trashed = false`;
   const res = await driveFetch(token, `${API}/files?fields=files(id)&pageSize=1&q=${encodeURIComponent(q)}`);
@@ -51,7 +51,7 @@ async function findChildFolder(token: string, parentId: string, name: string): P
   return body.files?.[0]?.id ?? null;
 }
 
-async function folderExists(token: string, id: string): Promise<boolean> {
+export async function folderExists(token: string, id: string): Promise<boolean> {
   const res = await driveFetch(token, `${API}/files/${id}?fields=id,trashed`);
   if (res.status === 404) return false;
   return !((await res.json()) as { trashed?: boolean }).trashed;
