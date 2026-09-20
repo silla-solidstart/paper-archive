@@ -14,12 +14,12 @@ These were decided deliberately. Do not revisit them without the user saying so.
   answers "what text is on this page?"; the LLM answers "what does this document mean?"
 - **Store raw OCR text and the AI interpretation separately.** The model output is
   never the only representation of a document.
-- **Originals live in the user's Google Drive, not our storage.** This is the trust
-  proposition, not an implementation detail.
-- **`drive.file` scope only.** Never request broader Drive access. It is the one Drive
-  scope Google treats as non-sensitive, which is what keeps us out of the verification
-  process. The app can only see files it created, so the "Paper Archive" folder ID must
-  be persisted in Postgres — it cannot be searched for later.
+- **Originals live in our R2 bucket, stored before anything else** (decided 2026-09-20,
+  superseding the brief's "user's own Drive"). Silla: shared archives made the
+  owner's-Drive model problematic (one person's grant, no ownership transfer, everyone
+  blocked when it lapsed), and dropping Drive "makes it easier for people to use the
+  app" — sign-in now needs only openid/email/profile, no consent screen. The Worker is
+  the only reader; access = archive membership. Google Drive is never requested.
 - **Postgres is the filing system.** Drive folders are for human convenience only.
 - **Retention advice is conservative.** Never tell a user an original is safe to discard
   unless that can genuinely be established. "Unsure — user review required" is a correct
@@ -33,16 +33,15 @@ These were decided deliberately. Do not revisit them without the user saying so.
 |---|---|
 | Frontend | Static HTML PWA in `public/`, served by Workers assets. The brief proposed Next.js; one page has not needed it. |
 | Backend | Cloudflare Workers |
-| Temp storage | None. The owner's Drive holds the original from the first second (see "Drive first"). |
-| Permanent storage | User's Google Drive |
+| Originals | Cloudflare R2, bucket `paper-archive-originals` (APAC), binding `ORIGINALS`; key `spaces/<space>/<doc>.<ext>` |
 | Database | Neon Postgres |
 | OCR | Google Document AI — Enterprise Document OCR |
 | Understanding | Claude (`claude-opus-5`), structured outputs, image + OCR text in |
 | Search | Postgres (see Japanese caveat below) → pgvector later |
 
-Pipeline: `Upload → Drive (original) → OCR → AI extraction → Index → rename in Drive → Done`.
-Each stage must be independently retryable; Document AI, Claude, and Drive all fail and
-rate-limit in production. Anything after the Drive step can be re-run later ("Re-analyze").
+Pipeline: `Upload → R2 (original) → OCR → AI extraction → Index → name → Done`.
+Each stage must be independently retryable; Document AI and Claude fail and rate-limit in
+production. Anything after the R2 step can be re-run later ("Re-analyze").
 
 ## Known traps
 
@@ -58,30 +57,33 @@ rate-limit in production. Anything after the Drive step can be re-run later ("Re
   and 納税通知書 → "pay by X" patterns are where competitors fail. Test against real
   documents, not synthetic ones.
 
-## Drive first (hard rule, decided 2026-09-20)
+## Originals: store first (hard rule, decided 2026-09-20)
 
-**The photo is saved to the archive owner's Google Drive before anything else
-happens, byte-for-byte as sent, regardless of what OCR or the model do
-afterwards.** Consequences:
+**The photo is stored before anything else happens, byte-for-byte as sent,
+regardless of what OCR or the model do afterwards.** It lives in R2
+(`src/storage.ts`), first tried in the owner's Google Drive the same day and
+moved the same day (see the non-negotiables). Consequences:
 
-- Order is Drive → OCR → understand → index → rename. A failure after the
-  Drive step leaves a document with `drive_file_id` set and `status = failed`;
-  the fix is *Re-analyze*, never a re-scan. There is no "not in Drive" state
-  for an indexed document.
-- If the owner's Google grant has lapsed, the scan stops *before* OCR with
-  `409 reconnect_google` (or `owner_no_drive`): nothing spent, photo still on
-  the phone. Members of a shared archive are blocked until the owner signs in
-  again — that is the honest consequence of "regardless".
+- Order is row → R2 put → OCR → understand → index → name. A failure after
+  the put leaves a document with `storage_key` set and `status = failed`; the
+  fix is *Re-analyze*, never a re-scan. If the put itself fails, the row is
+  discarded and nothing has been spent.
 - The "original" is the photo as the phone sends it: long edge 2200 px JPEG
   (~0.5 MB, ≈190 dpi on A4). Silla: "the document just needs to be legible";
-  nothing higher buys accuracy (Claude downsizes past ~1.5k px anyway).
-  No PDF wrapping, no re-encoding on the server.
-- Files land as `<timestamp>.jpg` under the scan month and are renamed
-  `date_issuer_title.jpg` (and moved to the document's own month) once
-  extraction succeeds. A document that never got read keeps the timestamp name.
+  nothing higher buys accuracy (Claude downsizes past ~1.5k px anyway). No
+  re-encoding on the server.
+- Readers: `GET /api/documents/:id/file` (session or bearer; member of the
+  document's archive, or admin) streams it with `Cache-Control: private`.
+  `POST /api/documents/:id/link` mints `/f/:id?t=` — HMAC-signed with the
+  session secret, 10 minutes — for cookie-less readers (MCP clients). The
+  bucket is private; nothing is ever served by bucket path.
+- `documents.filename` is the human name (`date_issuer_title.ext`, set after
+  extraction; timestamp name until then); the R2 key is the id.
 - The only dry path is `POST /api/process?dry=1` for the operator (prompt
   tuning, `scripts/eval-extract.ts`): nothing is stored anywhere, so there is
   nothing to protect.
+- Bucket creation needs R2 enabled on the Cloudflare account (dashboard,
+  once); `wrangler r2 bucket create paper-archive-originals --location apac`.
 
 ## Access (decided 2026-09-20): invite-only
 
@@ -193,8 +195,8 @@ ingest or re-analysis — is appended to `document_extractions` (full JSON,
 model, cost) and the document row shows the latest; nothing is ever lost.
 `user_overrides` marks fields the human set (`retention`, `issuer`); a re-run
 fills around them. Triggers: the *Re-analyze* button on a document
-(`POST /api/documents/:id/reanalyze`, original fetched from Drive, text-only
-fallback when it cannot be) and `npm run reextract` for everything below the
+(`POST /api/documents/:id/reanalyze`, original fetched from R2, text-only
+fallback for rows that predate it) and `npm run reextract` for everything below the
 current version (one document per request; ledgered as `kind = reanalyze`).
 
 ## What has been verified vs. only typechecked
@@ -206,9 +208,10 @@ tests), and the pure logic (`npm test`). Verified 2026-09-20 end to end through 
 migration runner (pg_trgm present on the Neon plan), service-account →
 Document AI, Claude structured extraction, Neon insert, recent/search
 (Japanese trigram hit confirmed). OAuth exchange verified 2026-09-20 (Silla
-signed in on the live site). **Never executed as of 2026-09-20:** the Drive
-upload/rename/download path and extraction v2 against real paper — the first
-scan after the Drive-first deploy is the test. Treat them as first-run risks.
+signed in on the live site). Extraction v2 (two calls) verified against the
+live API on a text sample. **Never executed as of 2026-09-20:** the R2
+put/get/delete path against real paper — the first scan after the R2 deploy
+is the test. Treat it as a first-run risk.
 
 ## Secrets
 

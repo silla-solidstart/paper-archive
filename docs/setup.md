@@ -45,7 +45,7 @@ users are not on the solidstart.jp domain.
       the app. And not left in Testing: Testing-mode refresh tokens expire after 7 days,
       which breaks a scan-and-forget product. Scopes here are all non-sensitive, so this
       should be a publish rather than a verification review.
-- [ ] Scopes: `openid`, `email`, `profile`, `https://www.googleapis.com/auth/drive.file`
+- [x] Scopes: `openid`, `email`, `profile` only (Drive scope dropped 2026-09-20; originals live in R2)
       — and nothing more. `drive.file` is non-sensitive, which is what keeps the
       verification process off the critical path.
 - [ ] Create an OAuth client ID, type **Web application**, with the redirect URI

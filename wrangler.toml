@@ -8,6 +8,12 @@ compatibility_flags = ["nodejs_compat"]
 pattern = "pa.solidstart.jp"
 custom_domain = true
 
+# Originals: one object per document, written before OCR (CLAUDE.md § Originals).
+# Create once: npx wrangler r2 bucket create paper-archive-originals --location apac
+[[r2_buckets]]
+binding = "ORIGINALS"
+bucket_name = "paper-archive-originals"
+
 # Non-secret config. Secrets go in .dev.vars locally and `wrangler secret put`
 # in production: GCP_SA_CLIENT_EMAIL, GCP_SA_PRIVATE_KEY, ANTHROPIC_API_KEY,
 # DATABASE_URL, GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET.

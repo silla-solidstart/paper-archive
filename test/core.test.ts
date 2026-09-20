@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildFilename } from "../src/filing.ts";
+import { buildFilename } from "../src/naming.ts";
 import { escapeLike } from "../src/db.ts";
 import { ExtractionSchema, ExpenseSchema, EXTRACTION_VERSION, normaliseExpense, splitTables, HANDLING, ITEM_CATEGORIES, RETENTION_STATUSES, DOCUMENT_TYPES } from "../src/extract.ts";
 import { base64url, pemToPkcs8 } from "../src/google-auth.ts";

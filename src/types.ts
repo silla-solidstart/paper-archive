@@ -13,6 +13,14 @@ export interface Env {
   // fronts every request and serves the app only to an allowed session.
   ASSETS: { fetch(request: Request): Promise<Response> };
 
+  // R2 bucket holding the originals (wrangler [[r2_buckets]] binding = "ORIGINALS").
+  // Structural so the Node test config compiles without workers-types.
+  ORIGINALS: {
+    put(key: string, value: ArrayBuffer, options?: { httpMetadata?: { contentType?: string; contentDisposition?: string } }): Promise<unknown>;
+    get(key: string): Promise<{ body: ReadableStream; arrayBuffer(): Promise<ArrayBuffer>; size: number; httpMetadata?: { contentType?: string } } | null>;
+    delete(key: string): Promise<void>;
+  };
+
   // Secrets
   APP_BEARER_TOKEN: string;
   SESSION_SECRET: string;

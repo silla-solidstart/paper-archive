@@ -7,7 +7,7 @@
  * Language: EN / 日本語 — UI strings here, and the model writes the summary
  * and retention reason in the same language (sent as X-Lang).
  * Spaces: everything you see is the current space; files go to the space
- * owner's Google Drive.
+ * private R2 storage; the Worker serves them to members of the archive.
  */
 "use strict";
 
@@ -54,24 +54,19 @@ const STR = {
     token_toggle: "Use an API token instead",
     preparing: "Preparing…", reading: (kb) => `Reading ${kb} KB… (OCR, then understanding)`,
     failed: "Failed", need_auth: "Sign in, or paste an API token below.",
-    not_filed: "Not filed — the space owner hasn't connected Google Drive.",
-    not_filed_self: "Not filed — sign in with Google to file scans to your Drive.",
-    filing_failed: "Indexed, but filing to Drive failed. Nothing is kept server-side, so take it again to file it.",
-    reconnect: (href) => `The space owner's Google access has lapsed — they need to <a href="${href}">sign in again</a>; then take it again to file it.`,
-    not_in_drive: "Not in Drive — take it again to file it.",
-    open_drive: "Open in Google Drive",
+    dry_hint: "Test run — nothing was saved.", view_photo: "View photo", photo_missing: "Photo not found.",
     retention: { digital_sufficient: "◎ Digital copy likely sufficient", keep_temporarily: "◍ Keep temporarily", keep_original: "◑ Keep original", unsure: "⚠ Unsure — your call" },
     decide: { digital_sufficient: "Digital is enough", keep_temporarily: "Keep for now", keep_original: "Keep original" },
     action_required: "Action required", action: { payment: "payment", appointment: "appointment", renewal: "renewal", signature: "signature", response: "response", cancellation: "cancellation" },
     overdue: (d) => `overdue by ${d}d`, due_today: "due today", due_in: (d) => `due in ${d}d`, due_on: (date) => `due ${date}`,
-    pill_review: "review", pill_not_in_drive: "not in Drive",
+    pill_review: "review",
     needs_action: "Needs action", nothing_yet: "No papers in this archive yet.", nothing_due: "Nothing needs action.",
     search_ph: "Property tax, Tokyo Gas, Jōetsu…", no_matches: "No matches.",
     loading: "Loading…", could_not_load: (m) => `Could not load: ${m}`, no_db: "No database configured yet.",
     gate: "Sign in with Google, or paste an API token on the Camera screen.", not_found: "Not found.",
     ocr: (pages, chars) => `OCR (${pages} page${pages === 1 ? "" : "s"}, ${chars} chars)`, ocr_text: "OCR text",
     indexed: "indexed", not_indexed: "not indexed", open: "open", back_archive: "← Papers", delete: "Delete", details: "Details",
-    confirm_delete: "Remove this document from the archive? The Drive file is moved to trash.",
+    confirm_delete: "Remove this document and its photo from the archive?",
     delete_failed: (m) => `Delete failed: ${m}`, save_failed: (m) => `Could not save: ${m}`,
     cost: (jpy, usd, tokens) => `≈ ¥${jpy} (US$${usd}) · ${tokens.toLocaleString()} tokens`,
     cost_short: (jpy) => `≈ ¥${jpy}`,
@@ -82,14 +77,13 @@ const STR = {
     // spaces
     spaces: "Archives", space: "Archive", your_archive: "Your archive", shared_with_you: "Shared with you", current: "default", owner: "yours", member: "shared",
     members_n: (n) => `${n} ${n === 1 ? "person" : "people"}`,
-    archives_hint: "You have one archive of your own. If someone shares theirs with you, you can make it your default and switch back any time. New documents go into your default archive — yours is stored in your Google Drive, a shared one in its owner's.",
+    archives_hint: "You have one archive of your own. If someone shares theirs with you, you can make it your default and switch back any time. New documents go into your default archive.",
     no_shared: "Nobody has shared an archive with you yet.",
     settings: "Settings", rename: "Rename", save: "Save", members: "People", remove: "Remove", leave: "Leave this archive",
     confirm_leave: "Leave this archive? You will no longer see its documents.", confirm_remove: (n) => `Remove ${n} from this archive?`,
     shared_by: (n) => `Shared by ${n}`,
     invites: "Share this archive", invite_hint: "Show the QR or send the link. It works for 7 days, up to 10 people; they sign in with Google and see everything in this archive.",
     create_invite: "Create invite link", copy: "Copy link", copied: "Copied", revoke: "Revoke", expires: (d) => `expires ${d}`, uses: (u, m) => `${u}/${m} used`,
-    where_files_go: (name) => `Documents you add to this archive are stored in its owner's Google Drive, under Paper Archive / ${name}.`,
     join_title: "Join a space", join_desc: (space, by) => `You've been invited to <b>${esc(space)}</b>${by ? ` by ${esc(by)}` : ""}.`,
     join: "Join", joined: (name) => `You're in ${name}.`, invite_invalid: "This invite link is invalid.", invite_expired: "This invite link has expired or was used up.",
     switch_to: "Make default",
@@ -107,7 +101,7 @@ const STR = {
     item_category: { groceries: "Groceries", snacks: "Snacks", alcohol: "Alcohol", beverages: "Drinks", household: "Household", dining: "Dining", transport: "Transport", utilities: "Utilities", medical: "Medical", education: "Education", clothing: "Clothing", electronics: "Electronics", entertainment: "Entertainment", subscription: "Subscription", fees: "Fees", tax: "Tax", business: "Business", other: "Other" },
     who_from: "Who is it from?", from_ph: "e.g. 宮原, Joetsu City", from_missing: "The paper doesn't say who sent it.", edit: "Edit",
     reanalyze: "Re-analyze", reanalyzing: "Re-analyzing…", reanalyzed: "Updated with the latest reading.", reanalyze_failed: (m) => `Re-analysis failed: ${m}`,
-    filed_pending: "Saved to Drive, but reading it failed. Open it and re-analyze to try again.",
+    filed_pending: "The photo is saved, but reading it failed. Open it and re-analyze to try again.",
     pill_failed: "not read", version: "Reading version",
     expense: "Expense", items: "Items", total: "Total", tax: "Tax", payment: "Paid by", kind: "Kind", merchant: "Merchant",
     payment_method: { cash: "cash", card: "card", transfer: "bank transfer", direct_debit: "direct debit", e_money: "e-money", other: "other" },
@@ -122,24 +116,19 @@ const STR = {
     token_toggle: "APIトークンを使う",
     preparing: "準備中", reading: (kb) => `${kb} KB を読み取り中（OCRのあと解析）`,
     failed: "失敗", need_auth: "ログインするか、下にAPIトークンを入力してください。",
-    not_filed: "未保存。アーカイブの所有者がGoogleドライブと連携していません。",
-    not_filed_self: "未保存。Googleでログインすると、ドライブに保存されます。",
-    filing_failed: "検索用には登録されましたが、ドライブへの保存に失敗しました。サーバーには残らないため、撮り直してください。",
-    reconnect: (href) => `アーカイブ所有者のGoogle連携が切れています。所有者が<a href="${href}">再ログイン</a>してから、撮り直してください。`,
-    not_in_drive: "ドライブに未保存。撮り直してください。",
-    open_drive: "Googleドライブで開く",
+    dry_hint: "テスト実行のため保存していません。", view_photo: "写真を見る", photo_missing: "写真が見つかりません。",
     retention: { digital_sufficient: "◎ デジタルで十分", keep_temporarily: "◍ しばらく保管", keep_original: "◑ 原本を保管", unsure: "⚠ 判断が必要" },
     decide: { digital_sufficient: "デジタルで十分", keep_temporarily: "しばらく保管", keep_original: "原本を保管" },
     action_required: "要対応", action: { payment: "支払い", appointment: "予約", renewal: "更新", signature: "署名", response: "回答", cancellation: "解約" },
     overdue: (d) => `${d}日超過`, due_today: "今日が期限", due_in: (d) => `あと${d}日`, due_on: (date) => `期限 ${date}`,
-    pill_review: "要確認", pill_not_in_drive: "未保存",
+    pill_review: "要確認",
     needs_action: "要対応", nothing_yet: "このアーカイブにはまだ書類がありません。", nothing_due: "いま、やることはありません。",
     search_ph: "固定資産税、東京ガス、上越市 など", no_matches: "見つかりませんでした。",
     loading: "読み込み中", could_not_load: (m) => `読み込めませんでした: ${m}`, no_db: "データベースが未設定です。",
     gate: "Googleでログインするか、撮影画面でAPIトークンを入力してください。", not_found: "見つかりません。",
     ocr: (pages, chars) => `OCR（${pages}ページ、${chars}文字）`, ocr_text: "OCRテキスト",
     indexed: "登録済み", not_indexed: "未登録", open: "開く", back_archive: "← 書類", delete: "削除", details: "詳細",
-    confirm_delete: "この書類をアーカイブから削除しますか？ドライブのファイルはゴミ箱に移動します。",
+    confirm_delete: "この書類と写真をアーカイブから削除しますか？",
     delete_failed: (m) => `削除できませんでした: ${m}`, save_failed: (m) => `保存できませんでした: ${m}`,
     cost: (jpy, usd, tokens) => `約¥${jpy}（US$${usd}）・${tokens.toLocaleString()}トークン`,
     cost_short: (jpy) => `約¥${jpy}`,
@@ -149,14 +138,13 @@ const STR = {
     category: { tax: "税金", property: "不動産", utilities: "公共料金", insurance: "保険", finance: "金融", education: "教育", health: "健康", legal: "法律", employment: "仕事", housing: "住まい", vehicle: "車", government: "行政", shopping: "買い物", other: "その他" },
     spaces: "アーカイブ", space: "アーカイブ", your_archive: "自分のアーカイブ", shared_with_you: "共有されたアーカイブ", current: "既定", owner: "所有者", member: "メンバー",
     members_n: (n) => `${n}人`,
-    archives_hint: "自分のアーカイブは1つです。共有されたアーカイブを既定にすることもでき、いつでも戻せます。撮影した書類は既定のアーカイブに入ります。自分のアーカイブは自分のGoogleドライブに、共有されたものは所有者のドライブに保存されます。",
+    archives_hint: "自分のアーカイブは1つです。誰かにアーカイブを共有されたら、そちらを既定にすることも、いつでも元に戻すこともできます。新しい書類は既定のアーカイブに入ります。",
     no_shared: "まだ共有されたアーカイブはありません。",
     settings: "設定", rename: "名前を変更", save: "保存", members: "メンバー", remove: "削除", leave: "このアーカイブから退出",
     confirm_leave: "このアーカイブから退出しますか？書類は見えなくなります。", confirm_remove: (n) => `${n} をこのアーカイブから削除しますか？`,
     shared_by: (n) => `${n} が共有`,
     invites: "このアーカイブを共有", invite_hint: "QRを見せるか、リンクを送ってください。7日間・最大10人まで有効。相手はGoogleでログインすると、このアーカイブの書類をすべて見られます。",
     create_invite: "招待リンクを作成", copy: "リンクをコピー", copied: "コピーしました", revoke: "無効化", expires: (d) => `有効期限 ${d}`, uses: (u, m) => `${u}/${m}人`,
-    where_files_go: (name) => `このアーカイブで撮影した書類は、所有者のGoogleドライブ内「Paper Archive / ${name}」に保存されます。`,
     join_title: "アーカイブに参加", join_desc: (space, by) => `${by ? `${esc(by)} から` : ""}<b>${esc(space)}</b> に招待されています。`,
     join: "参加", joined: (name) => `${name} に参加しました。`, invite_invalid: "この招待リンクは無効です。", invite_expired: "この招待リンクは期限切れか、使用回数の上限に達しています。",
     switch_to: "既定にする",
@@ -173,7 +161,7 @@ const STR = {
     item_category: { groceries: "食料品", snacks: "お菓子", alcohol: "お酒", beverages: "飲料", household: "日用品", dining: "外食", transport: "交通", utilities: "公共料金", medical: "医療", education: "教育", clothing: "衣類", electronics: "家電", entertainment: "娯楽", subscription: "定期契約", fees: "手数料", tax: "税金", business: "事業", other: "その他" },
     who_from: "差出人は？", from_ph: "例: 宮原、上越市", from_missing: "差出人が書かれていません。", edit: "編集",
     reanalyze: "読み取り直す", reanalyzing: "読み取り中", reanalyzed: "最新の読み取りに更新しました。", reanalyze_failed: (m) => `読み取り直せませんでした: ${m}`,
-    filed_pending: "Googleドライブには保存しましたが、読み取りに失敗しました。開いて読み取り直してください。",
+    filed_pending: "写真は保存できましたが、読み取れませんでした。開いて読み取り直してください。",
     pill_failed: "未読み取り", version: "読み取り版",
     expense: "支出", items: "明細", total: "合計", tax: "税額", payment: "支払い方法", kind: "種類", merchant: "支払先",
     payment_method: { cash: "現金", card: "カード", transfer: "振込", direct_debit: "口座振替", e_money: "電子マネー", other: "その他" },
@@ -397,9 +385,7 @@ async function process(file) {
     result.appendChild(resultCard(data));
   } catch (err) {
     const b = err.body || {};
-    if (b.error === "reconnect_google") status.innerHTML = t("reconnect", "/auth/login");
-    else if (b.error === "owner_no_drive") status.textContent = state.signedIn ? t("not_filed") : t("not_filed_self");
-    else if (b.id) status.innerHTML = `${t("filed_pending")} <a href="#/doc/${esc(b.id)}">${t("open")}</a>`;
+    if (b.id) status.innerHTML = `${t("filed_pending")} <a href="#/doc/${esc(b.id)}">${t("open")}</a>`;
     else status.textContent = `${t("failed")}: ${err.message}${b.stage ? ` (${b.stage})` : ""}`;
   } finally {
     btn.disabled = false; if (up) up.disabled = false;
@@ -478,7 +464,6 @@ async function docView(id) {
   const tables = Array.isArray(x.tables) ? x.tables : [];
   const fieldRows = fields.filter(([k]) => k !== "tables");
 
-  const driveLink = d.drive_file_id ? `https://drive.google.com/file/d/${encodeURIComponent(d.drive_file_id)}/view` : null;
 
   view.innerHTML = `
     <div class="card">
@@ -489,7 +474,7 @@ async function docView(id) {
       ${decideButtons(d.id)}
       ${handlingPills(d.handling)}
       ${d.status === "failed" ? `<div class="notice">${t("filed_pending")}</div>` : ""}
-      ${driveLink ? `<div class="drive">${icon("folder-open")} <a href="${driveLink}" target="_blank" rel="noopener">${t("open_drive")}</a></div>` : ""}
+      ${photoBlock(d.id, Boolean(d.storage_key))}
       <div id="sender">${senderBlock(d)}</div>
       <dl class="fields">${fieldRows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
       ${expenseBlock(expense)}
@@ -565,7 +550,7 @@ async function spaceView(id) {
   view.innerHTML = `
     <div class="card">
       <h3>${esc(s.name)} <span class="pill">${isOwner ? t("owner") : t("member")}</span></h3>
-      <div class="meta">${isOwner ? t("where_files_go", esc(s.name)) : t("shared_by", esc(s.owner_name || ""))}</div>
+      ${isOwner ? "" : `<div class="meta">${t("shared_by", esc(s.owner_name || ""))}</div>`}
       ${isOwner ? `<div class="search" style="margin-top:10px"><input id="rename" maxlength="60" value="${esc(s.name)}"><button class="small" id="renameBtn">${t("save")}</button></div>` : ""}
     </div>
     <div class="card">
@@ -827,9 +812,7 @@ function resultCard(data) {
   const x = data.extraction, el = document.createElement("div");
   el.className = "card";
   const money = x.amount != null ? `${x.currency || ""} ${Number(x.amount).toLocaleString()}` : null;
-  let drive = "";
-  if (data.filed) drive = `<div class="drive">${icon("folder-open")} <a href="${esc(data.filed.link)}" target="_blank" rel="noopener">${esc(data.filed.path)}</a></div>`;
-  else if (data.dry) drive = `<div class="meta">${t("not_filed_self")}</div>`;
+  const drive = data.id ? photoBlock(data.id, true) : data.dry ? `<div class="meta">${t("dry_hint")}</div>` : "";
   const ex = x.expense && Array.isArray(x.handling) && x.handling.includes("expense") ? x.expense : null;
   el.innerHTML = `
     <h3>${esc(x.title)}</h3>
@@ -855,6 +838,13 @@ const fmtMoney = (n, cur = "JPY") => {
   if (!Number.isFinite(v)) return "";
   return cur === "JPY" || !cur ? `¥${Math.round(v).toLocaleString()}` : `${cur} ${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 };
+
+/** The stored photo: a thumbnail that opens the original (same-origin, so the session cookie applies). */
+function photoBlock(id, stored) {
+  if (!stored) return `<div class="meta">${t("photo_missing")}</div>`;
+  const src = `/api/documents/${id}/file`;
+  return `<a class="photo" href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="" loading="lazy"><span>${icon("image")} ${t("view_photo")}</span></a>`;
+}
 
 function handlingPills(h) {
   if (!Array.isArray(h) || !h.length) return "";

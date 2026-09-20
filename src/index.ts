@@ -6,6 +6,7 @@ import { handleMcp } from "./mcp.ts";
 import {
   applyExtraction,
   deleteDocument,
+  discardDocument,
   ensureLocalUser,
   getDocument,
   getExpense,
@@ -23,42 +24,44 @@ import {
   recordScanCost,
   searchDocuments,
   setDocumentOcr,
+  setDocumentStorage,
   spendingSummary,
   updateDocumentFiling,
   updateDocumentIssuer,
   updateDocumentRetention,
+  type DocumentRow,
   type UserRow,
 } from "./db.ts";
 import { EXTRACTION_MODEL, EXTRACTION_VERSION, ITEM_CATEGORIES, RETENTION_STATUSES, type Extraction, type Lang, type RetentionStatus } from "./extract.ts";
 import { estimateCost, PRICING_AS_OF, type Cost } from "./pricing.ts";
 import type { OcrResult } from "./docai.ts";
-import { callback, login, logout, ReconnectRequired } from "./oauth.ts";
+import { callback, login, logout } from "./oauth.ts";
 import { readSession } from "./session.ts";
 import { accessFor, addAllowed, listAllowed, normaliseEntry, removeAllowed } from "./allow.ts";
 import { sharePage, signInPage } from "./gate.ts";
-import { buildFilename, finishFiling, stageToDrive, type Filed, type Staged } from "./filing.ts";
+import { buildFilename } from "./naming.ts";
+import { deleteOriginal, extensionFor, getOriginal, originalKey, putOriginal, signedLink, verifyLink } from "./storage.ts";
 import {
   acceptInvite, cleanName, createInvite, createSpace, getInvite, getSpaceForUser, listInvites, listMembers,
-  listSpaces, removeMember, renameSpace, revokeInvite, setCurrentSpace, currentSpace, spaceOwner, getSpaceById,
+  listSpaces, removeMember, renameSpace, revokeInvite, setCurrentSpace, currentSpace,
   type SpaceWithRole,
 } from "./spaces.ts";
-import { downloadFile, renameFile, trashFile } from "./drive.ts";
-import { userAccessToken } from "./oauth.ts";
 
 /**
  * Paper Archive — Cloudflare Worker.
  *
  * Auth is one of two things:
- *   - a session cookie from Sign in with Google → a real user, documents are
- *     filed to their Drive;
- *   - the shared bearer token → the single "local" user, nothing is filed.
- *     This is the pre-sign-in tester path and what MCP clients use.
+ *   - a session cookie from Sign in with Google → a real user;
+ *   - the shared bearer token → the single "local" user (operator, MCP, scripts).
+ * Originals live in R2 (src/storage.ts); the Worker is their only reader.
  *
  *   GET  /auth/login | /auth/callback | /auth/logout
  *   GET  /api/me        current user (session only)
- *   POST /api/process   Drive (original, first) → OCR → extraction → index → rename
+ *   POST /api/process   store original (R2, first) → OCR → extraction → index → name
  *                       ?dry=1 (operator): OCR + extraction only, nothing stored
- *   POST /api/documents/:id/reanalyze   re-run extraction (original from Drive) — versioned, ledgered
+ *   GET  /api/documents/:id/file        the original (session/bearer; space members)
+ *   POST /api/documents/:id/link        short-lived signed URL /f/:id?t= for cookie-less readers
+ *   POST /api/documents/:id/reanalyze   re-run extraction (original from R2) — versioned, ledgered
  *   GET  /api/issuers   senders seen in this archive ("who is it from?" chips)
  *   GET  /api/spending?month=YYYY-MM    expense ledger summary
  *   GET  /api/expense-items?month=&category=&q=   line items ("snacks in August")
@@ -67,7 +70,7 @@ import { userAccessToken } from "./oauth.ts";
  *   GET  /api/actions   documents needing something, soonest deadline first
  *   GET  /api/search?q= keyword search (Japanese-capable, trigram)
  *   GET  /api/documents/:id
- *   DELETE /api/documents/:id            removes the index row; trashes the Drive file
+ *   DELETE /api/documents/:id            removes the index row and the stored original
  *   PATCH /api/documents/:id/retention   { retention, reason? } — the human's call
  *   PATCH /api/documents/:id/issuer      { issuer } — the human names the sender; survives re-analysis
  *   Spaces (all scoped to the caller's current space):
@@ -132,7 +135,7 @@ async function sessionUser(request: Request, env: Env): Promise<{ user: UserRow;
 }
 
 // Paths anyone may fetch without a session. Everything else is gated.
-const PUBLIC_PATH = /^\/(health|privacy|auth\/|icons\/|manifest\.webmanifest$|sw\.js$)/;
+const PUBLIC_PATH = /^\/(health|privacy|auth\/|icons\/|f\/|manifest\.webmanifest$|sw\.js$)/;
 
 /** Session cookie first, then bearer token. Returns a Response to short-circuit. */
 async function resolveCaller(request: Request, env: Env): Promise<Caller | Response> {
@@ -191,9 +194,9 @@ export default {
 
     if (path === "/api/me") {
       if (!caller.user) return json({ error: "not signed in" }, 401);
-      const { email, name, drive_folder_id } = caller.user;
+      const { email, name } = caller.user;
       const space = hasDatabase(env) ? await currentSpace(env, caller.user) : null;
-      return json({ user: { email, name, drive_folder_id }, admin: caller.admin, space: space && { id: space.id, name: space.name, role: space.role } });
+      return json({ user: { email, name }, admin: caller.admin, space: space && { id: space.id, name: space.name, role: space.role } });
     }
 
     // ----- admin: the allow-list -----
@@ -349,20 +352,11 @@ export default {
         if (!issuer) return json({ error: "issuer required (1–60 chars)" }, 400);
         const row = await updateDocumentIssuer(env, spaceId, id, issuer);
         if (!row) return json({ error: "not found" }, 404);
-        // Best effort: the Drive file was named before the sender was known.
+        // The filename was built before the sender was known.
         let renamed: string | null = null;
-        if (row.drive_file_id && row.mime_type) {
-          try {
-            const owner = await spaceOwner(env, space);
-            if (owner?.google_refresh_token_enc) {
-              renamed = buildFilename({ document_date: row.document_date, issuer: row.issuer, title: row.title } as Extraction, row.mime_type, row.created_at.slice(0, 10));
-              await renameFile(await userAccessToken(env, owner), row.drive_file_id, renamed);
-              await updateDocumentFiling(env, id, { driveFileId: row.drive_file_id, filename: renamed, status: row.status as "complete" | "failed", error: row.error });
-            }
-          } catch (err) {
-            console.error(`[${rid}] rename after issuer edit failed:`, err);
-            renamed = null;
-          }
+        if (row.mime_type && row.status !== "processing") {
+          renamed = buildFilename({ document_date: row.document_date, issuer: row.issuer, title: row.title ?? "" }, row.mime_type, row.created_at.slice(0, 10));
+          await updateDocumentFiling(env, id, { filename: renamed, status: row.status as "complete" | "failed", error: row.error });
         }
         return json({ ok: true, id, issuer, filename: renamed });
       }
@@ -379,20 +373,14 @@ export default {
       if (!doc[2] && request.method === "DELETE") {
         const removed = await deleteDocument(env, spaceId, id);
         if (!removed) return json({ error: "not found" }, 404);
-        // Best effort: the index row is already gone; a Drive failure here
-        // leaves a stray file in the owner's folder, not a broken app. The file
-        // is in the space OWNER's Drive, so it is their grant that trashes it.
-        let driveTrashed = false;
-        const owner = removed.drive_file_id ? await spaceOwner(env, space) : null;
-        if (removed.drive_file_id && owner?.google_refresh_token_enc) {
-          try {
-            await trashFile(await userAccessToken(env, owner), removed.drive_file_id);
-            driveTrashed = true;
-          } catch (err) {
-            console.error(`[${rid}] trash failed:`, err);
-          }
+        // Best effort: the index row is already gone; a storage failure here
+        // leaves an orphan object, not a broken app.
+        let deleted = false;
+        if (removed.storage_key) {
+          try { await deleteOriginal(env, removed.storage_key); deleted = true; }
+          catch (err) { console.error(`[${rid}] delete original failed:`, err); }
         }
-        return json({ ok: true, id, drive_trashed: driveTrashed });
+        return json({ ok: true, id, original_deleted: deleted });
       }
       return json({ error: "method not allowed" }, 405);
     }
@@ -433,44 +421,62 @@ export default {
         }
       }
 
-      // Hard rule (2026-09-20): the photo is in the owner's Drive before we
-      // read it. No grant, no scan — the photo is still on the phone, and
-      // nothing has been spent.
+      // Hard rule (2026-09-20): the photo is stored before we read it. The
+      // row exists first so the object key is its id; if the put fails the
+      // row is discarded and nothing has been spent.
       const ctx = await callerContext(env, caller);
-      const owner = await spaceOwner(env, ctx.space);
-      if (!owner?.google_refresh_token_enc) {
-        return json({ error: "owner_no_drive", filing_error: "owner_no_drive", stage: "filing" }, 409);
-      }
-      let staged: Staged;
+      const provisional = `${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z")}.${extensionFor(mimeType)}`;
+      const id = await insertStagedDocument(env, ctx.space.id, ctx.user.id, { filename: provisional, mimeType, bytes: bytes.byteLength, lang });
+      const key = originalKey(ctx.space.id, id, mimeType);
       try {
-        staged = await stageToDrive(env, owner, ctx.space, bytes, mimeType);
+        await putOriginal(env, key, bytes, mimeType, provisional);
+        await setDocumentStorage(env, id, key);
       } catch (err) {
-        console.error(`[${rid}] staging to Drive failed:`, err);
-        if (err instanceof ReconnectRequired) return json({ error: "reconnect_google", filing_error: "reconnect_google", stage: "filing" }, 409);
-        return json({ error: "filing failed", stage: "filing", request_id: rid }, 502);
+        console.error(`[${rid}] storing original failed:`, err);
+        await discardDocument(env, id).catch(() => {});
+        return json({ error: "storage failed", stage: "storage", request_id: rid }, 502);
       }
-      const filename = decodeURIComponent(request.headers.get("X-Filename") ?? "") || staged.filename;
-      const id = await insertStagedDocument(env, ctx.space.id, ctx.user.id, {
-        driveFileId: staged.fileId, filename: staged.filename, mimeType, bytes: bytes.byteLength, lang,
-      });
-      void filename;
 
       try {
         const out = await interpret(env, {
           id, spaceId: ctx.space.id, userId: ctx.user.id, bytes, mimeType, ocrText: null, lang, from,
           trigger: "ingest", started, rid,
-          finish: (x) => finishFiling(staged, ctx.space, mimeType, x),
+          finish: async (x) => {
+            const filename = buildFilename(x, mimeType, new Date().toISOString().slice(0, 10));
+            await updateDocumentFiling(env, id, { filename, status: "complete", error: null });
+            return { filename, url: `/api/documents/${id}/file` };
+          },
         });
-        return json({ id, space_id: ctx.space.id, lang, cost: out.cost, filed: out.filed, filing_error: null, ocr: out.ocr, extraction: out.extraction });
+        return json({ id, space_id: ctx.space.id, lang, cost: out.cost, filed: out.filed, ocr: out.ocr, extraction: out.extraction });
       } catch (err) {
         const stage = err instanceof InterpretError ? err.stage : "extraction";
-        // The photo is filed and the row exists; the interpretation can be
+        // The photo is stored and the row exists; the interpretation can be
         // re-run later (Re-analyze), so this is a degraded document, not a lost scan.
-        return json({
-          error: "processing failed", stage, request_id: rid, id, space_id: ctx.space.id,
-          filed: { fileId: staged.fileId, filename: staged.filename, link: staged.link, path: staged.path },
-        }, 502);
+        return json({ error: "processing failed", stage, request_id: rid, id, space_id: ctx.space.id, filed: { filename: provisional, url: `/api/documents/${id}/file` } }, 502);
       }
+    }
+
+    // The original itself. Session or bearer; a member of the document's
+    // space, or an admin. Cache privately: the bytes never change.
+    const file = path.match(/^\/api\/documents\/([0-9a-f-]{36})\/(file|link)$/);
+    if (file) {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      const { space } = await callerContext(env, caller);
+      const doc = await getDocument(env, caller.admin ? null : space.id, file[1]);
+      if (!doc) return json({ error: "not found" }, 404);
+      if (file[2] === "link") {
+        if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+        return json(await signedLink(env, url.origin, doc.id));
+      }
+      return serveOriginal(env, doc);
+    }
+
+    // Cookie-less access via a signed, short-lived link (MCP clients, other apps).
+    const signed = path.match(/^\/f\/([0-9a-f-]{36})$/);
+    if (signed) {
+      if (!hasDatabase(env) || !(await verifyLink(env, signed[1], url.searchParams.get("t")))) return new Response("Link expired", { status: 403 });
+      const doc = await getDocument(env, null, signed[1]);
+      return doc ? serveOriginal(env, doc) : new Response("Not found", { status: 404 });
     }
 
     const re = path.match(/^\/api\/documents\/([0-9a-f-]{36})\/reanalyze$/);
@@ -481,20 +487,15 @@ export default {
       // Admins may re-analyse across archives (bulk re-enrichment); members only their current one.
       const doc = await getDocument(env, caller.admin ? null : space.id, id);
       if (!doc) return json({ error: "not found" }, 404);
-      const docSpace = doc.space_id === space.id ? space : await getSpaceById(env, doc.space_id);
-      if (!docSpace) return json({ error: "not found" }, 404);
 
-      // The original comes back from the owner's Drive. If that is impossible
-      // (grant lapsed, file gone) the stored OCR text still allows a text-only run.
+      // The original comes back from R2. Rows from before 0007 have no
+      // object; the stored OCR text still allows a text-only run.
       let bytes: ArrayBuffer | null = null;
       let mimeType = doc.mime_type ?? "application/octet-stream";
-      if (doc.drive_file_id) {
+      if (doc.storage_key) {
         try {
-          const owner = await spaceOwner(env, docSpace);
-          if (owner?.google_refresh_token_enc) {
-            const dl = await downloadFile(await userAccessToken(env, owner), doc.drive_file_id);
-            if (dl) { bytes = dl.bytes; mimeType = dl.mimeType; }
-          }
+          const obj = await getOriginal(env, doc.storage_key);
+          if (obj) { bytes = await obj.bytes(); mimeType = obj.mimeType; }
         } catch (err) {
           console.error(`[${rid}] reanalyze: could not fetch original:`, err);
         }
@@ -547,6 +548,27 @@ export default {
     return json({ error: "not found" }, 404);
   },
 } satisfies ExportedHandler<Env>;
+
+/** What the client gets back about the stored original. */
+interface Filed { filename: string; url: string }
+
+function serveOriginal(env: Env, doc: DocumentRow): Promise<Response> {
+  return (async () => {
+    if (!doc.storage_key) return json({ error: "no original stored for this document" }, 404);
+    const obj = await getOriginal(env, doc.storage_key);
+    if (!obj) return json({ error: "original missing from storage" }, 404);
+    const name = encodeURIComponent(doc.filename ?? `${doc.id}.${extensionFor(obj.mimeType)}`);
+    return new Response(obj.body, {
+      headers: {
+        "Content-Type": obj.mimeType,
+        "Content-Length": String(obj.size),
+        "Content-Disposition": `inline; filename*=UTF-8''${name}`,
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  })();
+}
 
 class InterpretError extends Error {
   stage: "ocr" | "extraction" | "index" | "filing";
@@ -601,10 +623,9 @@ async function interpret(
       stage = "filing";
       try {
         filed = await p.finish(extraction);
-        await updateDocumentFiling(env, p.id, { driveFileId: filed.fileId, filename: filed.filename, status: "complete", error: null });
       } catch (err) {
-        // The file is in Drive under its provisional name; only the rename failed.
-        console.error(`[${p.rid}] rename after extraction failed:`, err);
+        // The object is stored under its provisional name; only the naming failed.
+        console.error(`[${p.rid}] naming after extraction failed:`, err);
       }
     }
 

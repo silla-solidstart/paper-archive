@@ -4,15 +4,15 @@ import type { UserRow } from "./db.ts";
 
 /**
  * Spaces: the unit of sharing. See migrations/0004_spaces.sql for the model.
- * Files for a space live in the OWNER's Google Drive; members upload through
- * the owner's grant. The owner is therefore the one whose Drive access matters.
+ * Originals live in R2 under the space id (src/storage.ts); membership is the
+ * only thing that gates access to them.
  */
 
 export interface SpaceRow {
   id: string;
   name: string;
   owner_user_id: string;
-  drive_folder_id: string | null;
+  drive_folder_id: string | null; // unused since 0007
   created_at: string;
   updated_at: string;
 }
@@ -106,10 +106,6 @@ export async function renameSpace(env: Env, spaceId: string, userId: string, nam
     [spaceId, userId, name],
   );
   return (rows as unknown[]).length > 0;
-}
-
-export async function updateSpaceDriveFolder(env: Env, spaceId: string, folderId: string): Promise<void> {
-  await sql(env).query(`UPDATE spaces SET drive_folder_id = $2 WHERE id = $1`, [spaceId, folderId]);
 }
 
 export interface MemberRow {

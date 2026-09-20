@@ -1,6 +1,6 @@
 import type { Env } from "./types.ts";
 import type { UserRow } from "./db.ts";
-import { updateUserTokens, upsertGoogleUser } from "./db.ts";
+import { upsertGoogleUser } from "./db.ts";
 import { accessFor } from "./allow.ts";
 import { notInvitedPage } from "./gate.ts";
 import {
@@ -26,8 +26,9 @@ import {
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-const SCOPES = ["openid", "email", "profile", DRIVE_SCOPE].join(" ");
+// Sign-in only. The Drive scope was dropped 2026-09-20 (originals live in R2),
+// which also means no consent screen after the first sign-in.
+const SCOPES = ["openid", "email", "profile"].join(" ");
 const STATE_COOKIE = "pa_oauth_state";
 
 export function oauthConfigured(env: Env): boolean {
@@ -55,11 +56,6 @@ export async function login(env: Env, next = "/"): Promise<Response> {
     redirect_uri: env.GOOGLE_OAUTH_REDIRECT_URI,
     response_type: "code",
     scope: SCOPES,
-    // offline + consent: always receive a refresh token so the session can
-    // outlive the one-hour access token. The cost is seeing the consent
-    // screen on every sign-in; acceptable until there is a reason not to.
-    access_type: "offline",
-    prompt: "consent",
     state,
   });
 
@@ -114,12 +110,7 @@ export async function callback(request: Request, env: Env): Promise<Response> {
     grant_type: "authorization_code",
   });
 
-  // The user can untick Drive on the consent screen. Without it the product
-  // cannot file anything, so refuse cleanly rather than half-work.
-  if (!tokens.scope?.split(" ").includes(DRIVE_SCOPE)) {
-    return new Response("Google Drive access is required. Please sign in again and allow it.", { status: 403 });
-  }
-  if (!tokens.id_token || !tokens.refresh_token) {
+  if (!tokens.id_token) {
     return new Response("Google did not return the expected tokens", { status: 502 });
   }
   const nextPath = (() => {
@@ -144,7 +135,7 @@ export async function callback(request: Request, env: Env): Promise<Response> {
     sub: claims.sub,
     email: claims.email,
     name: claims.name ?? null,
-    refreshTokenEnc: await encrypt(env, tokens.refresh_token),
+    refreshTokenEnc: tokens.refresh_token ? await encrypt(env, tokens.refresh_token) : null,
     accessToken: tokens.access_token,
     expiresAt: new Date(Date.now() + tokens.expires_in * 1000),
   });
@@ -157,31 +148,4 @@ export async function callback(request: Request, env: Env): Promise<Response> {
 
 export function logout(): Response {
   return new Response(null, { status: 302, headers: { Location: "/", "Set-Cookie": clearSessionCookie() } });
-}
-
-/** The user revoked access, or the refresh token expired unused. */
-export class ReconnectRequired extends Error {}
-
-/** A valid Google access token for this user, refreshing if needed. */
-export async function userAccessToken(env: Env, user: UserRow): Promise<string> {
-  const expiresAt = user.google_token_expires_at ? new Date(user.google_token_expires_at).getTime() : 0;
-  if (user.google_access_token && expiresAt > Date.now() + 60_000) return user.google_access_token;
-
-  if (!user.google_refresh_token_enc) throw new ReconnectRequired("No Google refresh token stored");
-
-  let tokens: TokenResponse;
-  try {
-    tokens = await exchange(env, {
-      refresh_token: await decrypt(env, user.google_refresh_token_enc),
-      grant_type: "refresh_token",
-    });
-  } catch (err) {
-    if (err instanceof Error && /invalid_grant/.test(err.message)) {
-      throw new ReconnectRequired("Google access was revoked");
-    }
-    throw err;
-  }
-
-  await updateUserTokens(env, user.id, tokens.access_token, new Date(Date.now() + tokens.expires_in * 1000));
-  return tokens.access_token;
 }

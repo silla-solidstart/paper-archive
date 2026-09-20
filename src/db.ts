@@ -51,6 +51,7 @@ export interface DocumentRow {
   user_overrides: Record<string, boolean>;
   mime_type: string | null;
   bytes: number | null;
+  storage_key: string | null; // R2 object key (migration 0007)
 }
 
 export interface UserRow {
@@ -58,8 +59,8 @@ export interface UserRow {
   google_sub: string;
   email: string;
   name: string | null;
-  drive_folder_id: string | null;
-  google_refresh_token_enc: string | null;
+  drive_folder_id: string | null; // unused since 0007
+  google_refresh_token_enc: string | null; // unused since 0007 (Drive scope dropped); nullable
   google_access_token: string | null;
   google_token_expires_at: string | null;
   current_space_id: string | null;
@@ -114,7 +115,7 @@ export async function getUserById(env: Env, id: string): Promise<UserRow | null>
 
 export async function upsertGoogleUser(
   env: Env,
-  u: { sub: string; email: string; name: string | null; refreshTokenEnc: string; accessToken: string; expiresAt: Date },
+  u: { sub: string; email: string; name: string | null; refreshTokenEnc: string | null; accessToken: string; expiresAt: Date },
 ): Promise<UserRow> {
   const rows = await sql(env).query(
     `INSERT INTO users (google_sub, email, name, google_refresh_token_enc, google_access_token, google_token_expires_at)
@@ -122,7 +123,7 @@ export async function upsertGoogleUser(
      ON CONFLICT (google_sub) DO UPDATE SET
        email = EXCLUDED.email,
        name = COALESCE(EXCLUDED.name, users.name),
-       google_refresh_token_enc = EXCLUDED.google_refresh_token_enc,
+       google_refresh_token_enc = COALESCE(EXCLUDED.google_refresh_token_enc, users.google_refresh_token_enc),
        google_access_token = EXCLUDED.google_access_token,
        google_token_expires_at = EXCLUDED.google_token_expires_at
      RETURNING *`,
@@ -138,18 +139,14 @@ export async function updateUserTokens(env: Env, id: string, accessToken: string
   );
 }
 
-export async function updateUserDriveFolder(env: Env, id: string, folderId: string): Promise<void> {
-  await sql(env).query(`UPDATE users SET drive_folder_id = $2 WHERE id = $1`, [id, folderId]);
-}
-
 export async function updateDocumentFiling(
   env: Env,
   id: string,
-  f: { driveFileId: string | null; filename: string | null; status: "complete" | "failed"; error: string | null },
+  f: { filename: string | null; status: "complete" | "failed"; error: string | null },
 ): Promise<void> {
   await sql(env).query(
-    `UPDATE documents SET drive_file_id = $2, filename = COALESCE($3, filename), status = $4, error = $5 WHERE id = $1`,
-    [id, f.driveFileId, f.filename, f.status, f.error],
+    `UPDATE documents SET filename = COALESCE($2, filename), status = $3, error = $4 WHERE id = $1`,
+    [id, f.filename, f.status, f.error],
   );
 }
 
@@ -244,21 +241,31 @@ export async function insertDocument(
 }
 
 /**
- * Drive-first ingest: the row exists as soon as the bytes are in Drive, before
- * OCR. Everything interpretive is filled in by applyExtraction.
+ * Store-first ingest: the row is created, the bytes are put under a key
+ * derived from its id, then OCR runs. Everything interpretive is filled in
+ * by applyExtraction.
  */
 export async function insertStagedDocument(
   env: Env,
   spaceId: string,
   userId: string,
-  f: { driveFileId: string; filename: string; mimeType: string; bytes: number; lang: Lang },
+  f: { filename: string; mimeType: string; bytes: number; lang: Lang },
 ): Promise<string> {
   const rows = await sql(env).query(
-    `INSERT INTO documents (space_id, user_id, drive_file_id, filename, mime_type, bytes, lang, status, title)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'processing', $4) RETURNING id`,
-    [spaceId, userId, f.driveFileId, f.filename, f.mimeType, f.bytes, f.lang],
+    `INSERT INTO documents (space_id, user_id, filename, mime_type, bytes, lang, status, title)
+     VALUES ($1, $2, $3, $4, $5, $6, 'processing', $3) RETURNING id`,
+    [spaceId, userId, f.filename, f.mimeType, f.bytes, f.lang],
   );
   return (rows as Array<{ id: string }>)[0].id;
+}
+
+export async function setDocumentStorage(env: Env, id: string, storageKey: string): Promise<void> {
+  await sql(env).query(`UPDATE documents SET storage_key = $2 WHERE id = $1`, [id, storageKey]);
+}
+
+/** A staged row whose bytes never made it to storage: nothing to keep. */
+export async function discardDocument(env: Env, id: string): Promise<void> {
+  await sql(env).query(`DELETE FROM documents WHERE id = $1 AND status = 'processing'`, [id]);
 }
 
 export async function setDocumentOcr(env: Env, id: string, ocr: OcrResult): Promise<void> {
@@ -484,13 +491,13 @@ export async function getDocument(
   return (rows as DocumentRow[])[0] ?? null;
 }
 
-/** Removes the index row. Returns the Drive file id so the caller can trash it. */
-export async function deleteDocument(env: Env, spaceId: string, id: string): Promise<{ drive_file_id: string | null } | null> {
+/** Removes the index row. Returns the storage key so the caller can delete the object. */
+export async function deleteDocument(env: Env, spaceId: string, id: string): Promise<{ storage_key: string | null } | null> {
   const rows = await sql(env).query(
-    `DELETE FROM documents WHERE space_id = $1 AND id = $2 RETURNING drive_file_id`,
+    `DELETE FROM documents WHERE space_id = $1 AND id = $2 RETURNING storage_key`,
     [spaceId, id],
   );
-  return (rows as Array<{ drive_file_id: string | null }>)[0] ?? null;
+  return (rows as Array<{ storage_key: string | null }>)[0] ?? null;
 }
 
 export async function listActions(
