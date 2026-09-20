@@ -176,7 +176,7 @@ gcloud organizations remove-iam-policy-binding $ORG --member=$ME --role=roles/or
 Rotate this key every 90 days (`keys create` → new secret version → `scripts/sync-secrets.sh`
 → delete the old key). Keys never expire on their own; that is why the policy exists.
 
-### 2. The other secrets — still needed
+### 2. The other secrets — DATABASE_URL and ANTHROPIC_API_KEY DONE 2026-09-20; OAuth still needed
 
 ```bash
 P=solidstart-paper-archive; mk() { printf '%s' "$2" | gcloud secrets create "$1" --project=$P --replication-policy=automatic --data-file=-; }
@@ -207,11 +207,10 @@ mk GOOGLE_OAUTH_CLIENT_SECRET '…'
 
 ### 3. Then tell the agent. It can do the rest without you:
 
-- `npm run migrate` — applies `migrations/` over the Neon driver (no `psql` on this
-  machine) and reports whether `pg_trgm` exists.
-- `scripts/dev.sh` and a real scan through `/api/process` — the first execution of the
-  Claude extraction call and the service-account path against Google. Billable; the
-  agent caps itself at ~20 test runs per session (≈¥100) unless told otherwise.
+- ~~`npm run migrate`~~ done 2026-09-20; `pg_trgm` present.
+- ~~First pipeline run~~ done 2026-09-20 on the brief PDF: OCR → Claude → Neon → search, 18 s.
+  Next: real 納税通知書 scans via `scripts/dev.sh` + the PWA, or a folder through
+  `scripts/eval-extract.ts`. Billable; ~20 runs per session unless told otherwise.
 - Sign-in and Drive filing need a browser: that first run is yours, in **Chrome**
   (Safari drops the `Secure` session cookie on `http://localhost`).
 - Prompt tuning on the real corpus: put scans in a folder and run
