@@ -61,12 +61,12 @@ const COPY = {
   en: {
     tag: "Scan it. Know it. Let it go.",
     lead: "Know what's due. Find it after it's gone.",
-    who: "Invite only", share: "Share", share_hint: "Scan to open Paper Archive",
+    who: "Invite only", share: "Share",
   },
   ja: {
     tag: "撮る。わかる。手放せる。",
     lead: "いつ何をするかわかる。捨てても探せる。",
-    who: "招待制", share: "共有", share_hint: "スキャンするとPaper Archiveが開きます",
+    who: "招待制", share: "共有",
   },
 };
 
@@ -79,7 +79,7 @@ export function signInPage(next: string, lang: ButtonLang): Response {
   const nextQ = encodeURIComponent(next);
   return new Response(
     page(
-      lang === "ja" ? "ペーパーアーカイブ" : "Paper Archive",
+      "Paper Archive",
       `<h1 class="tag">${c.tag}</h1>
        <p class="lead">${c.lead}</p>
        <div class="cta">${googleSignInButton(lang, href)}</div>
@@ -97,7 +97,7 @@ export function notInvitedPage(email: string, lang: ButtonLang = "en"): Response
   const en = lang === "en";
   return new Response(
     page(
-      en ? "Paper Archive — invite only" : "ペーパーアーカイブ — 招待制",
+      en ? "Paper Archive — invite only" : "Paper Archive（招待制）",
       en
         ? `<h1>Invite only</h1><p class="ja">招待制のアプリです</p>
            <p><b>${safe}</b> isn't on the list. Ask the person who runs this archive to add you, then sign in again.</p>
@@ -115,7 +115,7 @@ export function sharePage(lang: ButtonLang): Response {
   const back = lang === "en" ? "Back" : "戻る";
   return new Response(
     page(
-      lang === "ja" ? "ペーパーアーカイブを共有" : "Share Paper Archive",
+      lang === "ja" ? "Paper Archiveを共有" : "Share Paper Archive",
       `<div class="top">${MARK}</div>
        <div class="mid"><div class="qrbox">${SITE_QR_SVG}</div></div>
        <div class="bot noprint"><a class="pill" href="/?lang=${lang}">${back}</a></div>

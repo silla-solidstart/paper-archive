@@ -81,6 +81,15 @@ punctuation; wrap only after punctuation (`word-break: keep-all`); ひらがな 
 exclamation marks. Retired: the pipeline arrows, 「撮る。忘れる。見つかる。」,
 「届いた紙が、自分で説明してくれる。」.
 
+## Japanese UI conventions (editor pass, 2026-09-20)
+
+「Googleドライブ」 unspaced in running text (Google's own button keeps 「Google でログイン」).
+The product is "Paper Archive" in Japanese too, not 「ペーパーアーカイブ」, except the
+katakana line under the wordmark. Roles: 所有者／メンバー. Retention: デジタルで十分／
+しばらく保管／原本を保管／判断が必要. Actions: 支払い・予約・更新・署名・回答・解約.
+Buttons are short noun forms (保存・削除・追加・参加). Confirm dialogs end in 「？」.
+Half-width `: ` before system error strings.
+
 ## Voice (short)
 
 Plain, bilingual, unhurried. English and Japanese are peers, not translations of

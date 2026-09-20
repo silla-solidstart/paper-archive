@@ -1,5 +1,5 @@
 /* App-shell cache only. API, auth and MCP always go to the network. */
-const VERSION = "pa-shell-v13";
+const VERSION = "pa-shell-v14";
 const SHELL = ["/", "/index.html", "/app.js", "/icons.js", "/styles.css", "/manifest.webmanifest",
                "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/icons/favicon.svg", "/vendor/qrcode.mjs"];
 
