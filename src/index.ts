@@ -24,6 +24,8 @@ import { RETENTION_STATUSES, type Lang, type RetentionStatus } from "./extract.t
 import { estimateCost, PRICING_AS_OF } from "./pricing.ts";
 import { callback, login, logout, ReconnectRequired } from "./oauth.ts";
 import { readSession } from "./session.ts";
+import { accessFor, addAllowed, listAllowed, normaliseEntry, removeAllowed } from "./allow.ts";
+import { signInPage } from "./gate.ts";
 import { fileToDrive, type Filed } from "./filing.ts";
 import {
   acceptInvite, cleanName, createInvite, createSpace, getInvite, getSpaceForUser, listInvites, listMembers,
@@ -91,6 +93,7 @@ const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
 
 interface Caller {
   user: UserRow | null; // null = bearer-token "local" caller
+  admin: boolean;       // bootstrap/admin-row session, or the bearer token (operator)
 }
 
 /** The caller as a users row (the bearer caller is the "local" user) and their current space. */
@@ -100,17 +103,27 @@ async function callerContext(env: Env, caller: Caller): Promise<{ user: UserRow;
   return { user, space };
 }
 
+/** The signed-in user, if the cookie is valid AND the email is still allowed. */
+async function sessionUser(request: Request, env: Env): Promise<{ user: UserRow; admin: boolean } | null> {
+  const sessionUserId = await readSession(request, env);
+  if (!sessionUserId || !hasDatabase(env)) return null;
+  const user = await getUserById(env, sessionUserId);
+  if (!user) return null;
+  // Removal from the allow-list takes effect on the next request, not at next sign-in.
+  const access = await accessFor(env, user.email);
+  return access.allowed ? { user, admin: access.admin } : null;
+}
+
+// Paths anyone may fetch without a session. Everything else is gated.
+const PUBLIC_PATH = /^\/(health|privacy|auth\/|icons\/|manifest\.webmanifest$|sw\.js$)/;
+
 /** Session cookie first, then bearer token. Returns a Response to short-circuit. */
 async function resolveCaller(request: Request, env: Env): Promise<Caller | Response> {
-  const sessionUserId = await readSession(request, env);
-  if (sessionUserId && hasDatabase(env)) {
-    const user = await getUserById(env, sessionUserId);
-    if (user) return { user };
-    // Stale cookie for a user that no longer exists: fall through to bearer.
-  }
+  const s = await sessionUser(request, env);
+  if (s) return { user: s.user, admin: s.admin };
   const denied = await requireBearer(request, env);
   if (denied) return denied;
-  return { user: null };
+  return { user: null, admin: true };
 }
 
 export default {
@@ -123,7 +136,7 @@ export default {
     // Unauthenticated: liveness only. Nothing about configuration leaks here.
     if (path === "/health") return json({ ok: true });
 
-    if (path === "/auth/login") return login(env);
+    if (path === "/auth/login") return login(env, url.searchParams.get("next") ?? "/");
     if (path === "/auth/callback") return callback(request, env);
     if (path === "/auth/logout") return logout();
 
@@ -143,7 +156,11 @@ export default {
       return inv ? json({ invite: inv }) : json({ error: "not found" }, 404);
     }
 
-    if (!path.startsWith("/api/")) return json({ error: "not found" }, 404);
+    if (!path.startsWith("/api/")) {
+      // Static app: public paths pass through; everything else needs an allowed session.
+      if (PUBLIC_PATH.test(path) || (await sessionUser(request, env))) return env.ASSETS.fetch(request);
+      return signInPage(path + url.search);
+    }
 
     const caller = await resolveCaller(request, env);
     if (caller instanceof Response) return caller;
@@ -152,7 +169,32 @@ export default {
       if (!caller.user) return json({ error: "not signed in" }, 401);
       const { email, name, drive_folder_id } = caller.user;
       const space = hasDatabase(env) ? await currentSpace(env, caller.user) : null;
-      return json({ user: { email, name, drive_folder_id }, space: space && { id: space.id, name: space.name, role: space.role } });
+      return json({ user: { email, name, drive_folder_id }, admin: caller.admin, space: space && { id: space.id, name: space.name, role: space.role } });
+    }
+
+    // ----- admin: the allow-list -----
+    if (path === "/api/admin/allowlist" || path.startsWith("/api/admin/allowlist/")) {
+      if (!caller.admin) return json({ error: "admin only" }, 403);
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      if (path === "/api/admin/allowlist" && request.method === "GET") {
+        return json({ bootstrap: env.ADMIN_EMAILS ?? "", entries: await listAllowed(env) });
+      }
+      if (path === "/api/admin/allowlist" && request.method === "POST") {
+        const body = (await request.json().catch(() => null)) as { email?: unknown; role?: unknown; note?: unknown } | null;
+        const entry = normaliseEntry(body?.email);
+        if (!entry) return json({ error: "email or @domain required" }, 400);
+        const role = body?.role === "admin" ? "admin" : "member";
+        if (role === "admin" && entry.startsWith("@")) return json({ error: "a domain cannot be admin" }, 400);
+        const note = typeof body?.note === "string" ? body.note.slice(0, 200) : null;
+        return json({ entry: await addAllowed(env, entry, role, note, caller.user?.id ?? null) }, 201);
+      }
+      const m = path.match(/^\/api\/admin\/allowlist\/(.+)$/);
+      if (m && request.method === "DELETE") {
+        const entry = normaliseEntry(decodeURIComponent(m[1]));
+        if (!entry) return json({ error: "invalid entry" }, 400);
+        return (await removeAllowed(env, entry)) ? json({ ok: true }) : json({ error: "not found" }, 404);
+      }
+      return json({ error: "method not allowed" }, 405);
     }
 
     // ----- spaces -----
@@ -243,8 +285,8 @@ export default {
 
     if (path === "/api/costs") {
       if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
-      // A session user sees their own; the bearer token is the operator and sees everything.
-      return json({ pricing_as_of: PRICING_AS_OF, ...(await costSummary(env, caller.user?.id ?? null)) });
+      // Admins (and the bearer operator) see everything; a member sees their own.
+      return json({ pricing_as_of: PRICING_AS_OF, ...(await costSummary(env, caller.admin ? null : caller.user!.id)) });
     }
 
     if (path === "/api/actions") {

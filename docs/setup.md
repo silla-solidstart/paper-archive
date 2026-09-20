@@ -217,6 +217,12 @@ mk GOOGLE_OAUTH_CLIENT_SECRET '…'
   `node scripts/eval-extract.ts <folder>` against the dev server. One line per document,
   full responses saved for diffing between prompt versions.
 
+### 3a. Who can sign in
+
+Invite-only. You are bootstrap admin via `ADMIN_EMAILS` in `wrangler.toml`. Add people at
+https://pa.solidstart.jp/#/admin (email, or `@domain` for a whole domain). Removal takes
+effect on their next request.
+
 ### 3b. Admin cost dashboard (local, no deploy)
 
 `npm run dashboard` → http://localhost:8799. Reads the ledger from Neon via Secret Manager.

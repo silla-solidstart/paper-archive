@@ -56,6 +56,13 @@ app loads Plex only as a subset for the wordmark.
 
 Fallback stack: `'IBM Plex Sans JP', 'Hiragino Sans', 'Noto Sans JP', -apple-system, sans-serif`.
 
+## Icons
+
+**Lucide** (ISC, https://lucide.dev), 2 px stroke, `currentColor`. Only the icons
+in use are vendored, as inline SVG in `public/icons.js`; add more by extending the
+name list in the generator step recorded in `public/vendor/README.txt`. No emoji in
+the interface; the retention glyphs ◎ ◍ ◑ ⚠ are typographic and stay.
+
 ## Voice (short)
 
 Plain, bilingual, unhurried. English and Japanese are peers, not translations of

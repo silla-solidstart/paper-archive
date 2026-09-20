@@ -47,6 +47,7 @@ print("GCP_SA_PRIVATE_KEY=\"" + k["private_key"].replace("\n", "\\n") + "\"")
 fi
 
 printf 'GOOGLE_OAUTH_REDIRECT_URI="http://localhost:%s/auth/callback"\n' "$PORT" >> .dev.vars
+printf 'ADMIN_EMAILS="silla@solidstart.jp"\n' >> .dev.vars
 
 echo "loaded: ${loaded[*]:-none}"
 echo "wrangler dev on http://localhost:$PORT"

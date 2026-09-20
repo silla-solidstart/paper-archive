@@ -65,6 +65,17 @@ but the Drive upload fails, the document is indexed with `status = failed` and
 the only recovery is a re-scan. The UI says so. When Workflows arrive, add R2
 as the staging store and this becomes a real retry.
 
+## Access (decided 2026-09-20): invite-only
+
+The whole app — static shell included — is behind Google sign-in. Who may sign
+in = `ADMIN_EMAILS` (wrangler `[vars]`, bootstrap; always allowed, always admin,
+cannot be locked out) ∪ rows in `allowed_users` (emails or `@domain`, with a
+role). Admins manage the table at `#/admin`. The check runs at sign-in (no
+session is created for a stranger) and on every request (removal is immediate).
+Public paths: `/privacy` (Google requires it), `/health`, `/auth/*`, icons,
+manifest, service worker. Space invites do not bypass the list. The bearer
+token remains the operator identity (MCP, tests) and is admin.
+
 ## Spaces (decided 2026-09-20)
 
 A **space** is the unit of sharing; every document belongs to exactly one.

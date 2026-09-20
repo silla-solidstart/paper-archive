@@ -18,9 +18,13 @@ GCP_DOCAI_LOCATION = "asia-southeast1"
 GCP_DOCAI_PROCESSOR_ID = "e362ac4f7e80f6e"
 GCP_DOCAI_PROCESSOR_VERSION = "pretrained-ocr-v2.1.1-2025-01-31"
 GOOGLE_OAUTH_REDIRECT_URI = "https://pa.solidstart.jp/auth/callback"
+# Bootstrap admins: always allowed and admin, even if allowed_users is emptied.
+ADMIN_EMAILS = "silla@solidstart.jp"
 
 # The PWA. Served for any path the Worker does not handle.
 [assets]
 directory = "public"
+binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*", "/auth/*", "/mcp", "/health"]
+# The Worker fronts every request: the app is served only to an allowed session.
+run_worker_first = true

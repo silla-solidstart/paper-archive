@@ -26,21 +26,23 @@
       <path d="M258 170 L326 222 L394 170" fill="none" stroke="currentColor" stroke-width="18" stroke-linejoin="round"/>
 </svg><span class="wordmark">Paper Archive</span></div>
   <div class="who" id="who"></div>
-  <button class="small" id="space" hidden></button>
-  <button class="small" id="shareBtn">⇪</button>
-  <button class="small" id="lang" aria-label="Language">日本語</button>
+  <button class="small" id="adminBtn" hidden><i data-icon="shield-check"></i><span>Admin</span></button>
+  <button class="small" id="space" hidden><i data-icon="users"></i><span></span></button>
+  <button class="small" id="shareBtn"><i data-icon="qr-code"></i><span>Share</span></button>
+  <button class="small" id="lang" aria-label="Language"><i data-icon="languages"></i><span>日本語</span></button>
 </header>
 
 <main id="view" aria-live="polite"></main>
 
 <nav class="tabs" id="tabs">
-  <a href="#/" data-tab="scan"><span class="glyph">📷</span><span>Scan</span></a>
-  <a href="#/recent" data-tab="recent"><span class="glyph">🗂</span><span>Recent</span></a>
-  <a href="#/actions" data-tab="actions"><span class="glyph">⚠️</span><span>Actions</span></a>
-  <a href="#/search" data-tab="search"><span class="glyph">🔍</span><span>Search</span></a>
+  <a href="#/" data-tab="scan"><i class="glyph" data-icon="camera"></i><span>Scan</span></a>
+  <a href="#/recent" data-tab="recent"><i class="glyph" data-icon="inbox"></i><span>Recent</span></a>
+  <a href="#/actions" data-tab="actions"><i class="glyph" data-icon="triangle-alert"></i><span>Actions</span></a>
+  <a href="#/search" data-tab="search"><i class="glyph" data-icon="search"></i><span>Search</span></a>
 </nav>
 
 <input id="file" type="file" accept="image/*,application/pdf" capture="environment" hidden>
+<script src="/icons.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

@@ -10,11 +10,12 @@
           --card: #1b1b1b; --line: #2a2a2a; --warn-bg: #3a2e0a; --warn-fg: #fde68a; --danger: #f87171; --ok: #4ade80; }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; background: var(--bg); color: var(--fg); }
 body { font: 16px/1.5 -apple-system, "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
        padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom)); }
 
-.top #lang, .top #space, .top #shareBtn { margin-left: 8px; }
+.top #lang, .top #space, .top #shareBtn, .top #adminBtn { margin-left: 8px; }
 .top #space { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search button.small { flex: 0 0 auto; }
 .top { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 10px;
@@ -34,7 +35,12 @@ p.sub { color: var(--muted); margin: 0 0 16px; }
         padding-bottom: env(safe-area-inset-bottom); display: flex; background: var(--card); border-top: 1px solid var(--line); z-index: 2; }
 .tabs a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
           font-size: 11px; color: var(--muted); text-decoration: none; }
-.tabs a .glyph { font-size: 20px; line-height: 1; }
+.tabs a .glyph { width: 22px; height: 22px; display: block; }
+i[data-icon] { display: inline-block; vertical-align: -3px; line-height: 0; }
+i[data-icon] svg, .ic { width: 1.15em; height: 1.15em; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tabs a .glyph svg { width: 22px; height: 22px; }
+button.small i[data-icon] { margin-right: 5px; }
+.top button.small { display: inline-flex; align-items: center; }
 .tabs a.active { color: var(--accent); font-weight: 600; }
 
 .scan { display: block; width: 100%; padding: 32px 16px; font-size: 22px; font-weight: 700; color: var(--accent-fg);
@@ -95,3 +101,12 @@ dl.fields dd { margin: 0; word-break: break-word; }
   .qr { width: 72vw; max-width: 600px; }
   .url { font-size: 16px; color: #000; }
 }
+
+/* admin */
+table.admin { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.admin th, table.admin td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.admin th { color: var(--muted); font-weight: 500; font-size: 12px; }
+.addrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; }
+.addrow input, .addrow select { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 15px; }
+.addrow .full { grid-column: 1 / -1; }
+.stat { display: inline-block; margin: 6px 18px 0 0; } .stat b { display: block; font-size: 20px; }

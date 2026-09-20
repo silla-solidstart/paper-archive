@@ -6,6 +6,12 @@ export interface Env {
   GCP_DOCAI_PROCESSOR_ID: string;
   GCP_DOCAI_PROCESSOR_VERSION: string;
   GOOGLE_OAUTH_REDIRECT_URI: string;
+  // Bootstrap admins (config, not secret): always allowed, always admin.
+  ADMIN_EMAILS: string;
+
+  // Static assets binding (wrangler [assets] binding = "ASSETS"); the Worker
+  // fronts every request and serves the app only to an allowed session.
+  ASSETS: { fetch(request: Request): Promise<Response> };
 
   // Secrets
   APP_BEARER_TOKEN: string;

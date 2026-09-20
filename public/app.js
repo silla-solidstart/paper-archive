@@ -15,9 +15,13 @@ const MAX_EDGE = 2200;
 const JPEG_QUALITY = 0.85;
 
 const $ = (sel, el = document) => el.querySelector(sel);
-const view = $("#view"), who = $("#who"), fileInput = $("#file"), langBtn = $("#lang"), spaceBtn = $("#space"), shareBtn = $("#shareBtn");
+const view = $("#view"), who = $("#who"), fileInput = $("#file"), langBtn = $("#lang"), spaceBtn = $("#space"), shareBtn = $("#shareBtn"), adminBtn = $("#adminBtn");
 
-const state = { signedIn: false, user: null, space: null, token: "", lastResult: null, lang: "en" };
+// Lucide icons (public/icons.js). icon(name) returns inline SVG that follows currentColor.
+const icon = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${(window.LUCIDE || {})[name] || ""}</svg>`;
+function paintIcons(root = document) { root.querySelectorAll("i[data-icon]").forEach((el) => { if (!el.firstChild) el.innerHTML = icon(el.dataset.icon); }); }
+
+const state = { signedIn: false, user: null, space: null, admin: false, token: "", lastResult: null, lang: "en" };
 try { state.token = localStorage.getItem("pa_token") || ""; } catch {}
 try {
   const saved = localStorage.getItem("pa_lang");
@@ -45,7 +49,7 @@ const STR = {
     action_required: "Action required", action: { payment: "payment", appointment: "appointment", renewal: "renewal", signature: "signature", response: "response", cancellation: "cancellation" },
     overdue: (d) => `overdue by ${d}d`, due_today: "due today", due_in: (d) => `due in ${d}d`, due_on: (date) => `due ${date}`,
     pill_review: "review", pill_not_in_drive: "not in Drive",
-    recent: "Recent", needs_action: "Needs action", nothing_yet: "Nothing scanned in this space yet.", nothing_due: "Nothing needs action. 🎉",
+    recent: "Recent", needs_action: "Needs action", nothing_yet: "Nothing scanned in this space yet.", nothing_due: "Nothing needs action.",
     search_ph: "固定資産税, Tokyo Gas, 上越市…", search_hint: "Search OCR text, titles and issuers. Japanese works.", no_matches: "No matches.",
     loading: "Loading…", could_not_load: (m) => `Could not load: ${m}`, no_db: "No database configured yet.",
     gate: "Sign in with Google, or paste an API token on the Scan screen.", not_found: "Not found.",
@@ -72,6 +76,10 @@ const STR = {
     share: "Share", share_app: "Share the app", share_app_hint: "Scan to open Paper Archive. Print it and put it where the mail lands.",
     share_space: (n) => `Invite to ${n}`, share_space_hint: "Scan to join this space. The link works for 7 days, up to 10 people; they sign in with Google.",
     share_native: "Share…", print: "Print", open_link: "Open",
+    admin: "Admin", admin_title: "Who can sign in", admin_hint: "Invite-only. Add an email, or @domain for everyone at a domain. Removal takes effect on their next request.",
+    admin_bootstrap: (list) => `Always allowed (config): ${list}`, entry: "Email or @domain", role: "Role", note: "Note (optional)", added: "Added", add: "Add",
+    role_admin: "admin", role_member: "member", confirm_remove_entry: (e) => `Remove ${e} from the allow-list?`,
+    costs_title: "Costs, all users", attempts: "scans", spend: "spend", avg_scan: "avg / scan",
   },
   ja: {
     tab_scan: "スキャン", tab_recent: "最近", tab_actions: "要対応", tab_search: "検索",
@@ -91,7 +99,7 @@ const STR = {
     action_required: "要対応", action: { payment: "支払い", appointment: "予約", renewal: "更新", signature: "署名", response: "返信", cancellation: "解約" },
     overdue: (d) => `期限超過 ${d}日`, due_today: "本日期限", due_in: (d) => `あと${d}日`, due_on: (date) => `期限 ${date}`,
     pill_review: "要確認", pill_not_in_drive: "未保存",
-    recent: "最近", needs_action: "要対応", nothing_yet: "このスペースにはまだスキャンがありません。", nothing_due: "対応が必要なものはありません 🎉",
+    recent: "最近", needs_action: "要対応", nothing_yet: "このスペースにはまだスキャンがありません。", nothing_due: "対応が必要なものはありません。",
     search_ph: "固定資産税、東京ガス、上越市…", search_hint: "OCRテキスト・タイトル・発行元を検索します。", no_matches: "該当なし。",
     loading: "読み込み中…", could_not_load: (m) => `読み込めませんでした: ${m}`, no_db: "データベースが未設定です。",
     gate: "Googleでログインするか、スキャン画面でAPIトークンを入力してください。", not_found: "見つかりません。",
@@ -117,6 +125,10 @@ const STR = {
     share: "共有", share_app: "アプリを共有", share_app_hint: "スキャンするとPaper Archiveが開きます。印刷して郵便物の置き場に貼っておくと便利です。",
     share_space: (n) => `「${n}」に招待`, share_space_hint: "スキャンするとこのスペースに参加できます。リンクは7日間・最大10人まで有効。参加にはGoogleログインが必要です。",
     share_native: "共有…", print: "印刷", open_link: "開く",
+    admin: "管理", admin_title: "ログインできる人", admin_hint: "招待制です。メールアドレス、またはドメイン全体なら @ドメイン を追加します。削除は次のリクエストから反映されます。",
+    admin_bootstrap: (list) => `常に許可（設定）: ${list}`, entry: "メールまたは @ドメイン", role: "権限", note: "メモ（任意）", added: "追加日", add: "追加",
+    role_admin: "管理者", role_member: "メンバー", confirm_remove_entry: (e) => `${e} を許可リストから削除しますか？`,
+    costs_title: "費用（全ユーザー）", attempts: "スキャン", spend: "支出", avg_scan: "1件あたり",
   },
 };
 const t = (key, ...args) => { const v = STR[state.lang][key]; return typeof v === "function" ? v(...args) : v; };
@@ -125,12 +137,15 @@ const tt = (group, key) => (STR[state.lang][group] || {})[key] ?? key;
 function applyLang() {
   document.documentElement.lang = state.lang;
   document.querySelectorAll(".tabs a").forEach((a) => { a.lastChild.textContent = t("tab_" + a.dataset.tab); });
-  langBtn.textContent = state.lang === "en" ? "日本語" : "EN";
+  langBtn.querySelector("span").textContent = state.lang === "en" ? "日本語" : "EN";
   langBtn.title = t("lang_name")[state.lang === "en" ? "ja" : "en"];
-  shareBtn.textContent = "⇪ " + t("share");
+  shareBtn.querySelector("span").textContent = t("share");
+  adminBtn.querySelector("span").textContent = t("admin");
+  paintIcons();
   renderSpaceBtn();
 }
 shareBtn.addEventListener("click", () => { location.hash = "#/share"; });
+adminBtn.addEventListener("click", () => { location.hash = "#/admin"; });
 langBtn.addEventListener("click", () => {
   state.lang = state.lang === "en" ? "ja" : "en";
   try { localStorage.setItem("pa_lang", state.lang); } catch {}
@@ -162,11 +177,12 @@ function canCall() { return state.signedIn || Boolean(state.token); }
 
 async function whoami() {
   try {
-    const { user, space } = await api("/api/me");
-    state.signedIn = true; state.user = user; state.space = space;
-  } catch { state.signedIn = false; state.user = null; }
+    const { user, space, admin } = await api("/api/me");
+    state.signedIn = true; state.user = user; state.space = space; state.admin = Boolean(admin);
+  } catch { state.signedIn = false; state.user = null; state.admin = false; }
   if (!state.signedIn && state.token) {
-    try { const { spaces, current } = await api("/api/spaces"); state.space = spaces.find((s) => s.id === current) || null; } catch { state.space = null; }
+    // The bearer token is the operator: admin, in its own space.
+    try { const { spaces, current } = await api("/api/spaces"); state.space = spaces.find((s) => s.id === current) || null; state.admin = true; } catch { state.space = null; }
   }
   renderWho(); renderSpaceBtn();
 }
@@ -178,7 +194,8 @@ function renderWho() {
 }
 function renderSpaceBtn() {
   spaceBtn.hidden = !state.space;
-  if (state.space) spaceBtn.textContent = "⌂ " + state.space.name;
+  if (state.space) spaceBtn.querySelector("span").textContent = state.space.name;
+  adminBtn.hidden = !state.admin;
 }
 spaceBtn.addEventListener("click", () => { location.hash = "#/spaces"; });
 
@@ -194,6 +211,7 @@ const routes = [
   [/^#\/space\/([0-9a-f-]{36})$/, spaceView],
   [/^#\/join\/([A-Za-z0-9_-]{20,64})$/, joinView],
   [/^#\/share$/, shareView],
+  [/^#\/admin$/, adminView],
 ];
 
 async function route() {
@@ -361,13 +379,13 @@ async function docView(id) {
       ${actionLine(d)}
       <div class="keep" id="keep">${retentionLabel(d.retention)} <span class="meta">— ${esc(d.retention_reason || "")}</span></div>
       ${decideButtons(d.id)}
-      ${driveLink ? `<div class="drive">📁 <a href="${driveLink}" target="_blank" rel="noopener">${t("open_drive")}</a></div>`
+      ${driveLink ? `<div class="drive">${icon("folder-open")} <a href="${driveLink}" target="_blank" rel="noopener">${t("open_drive")}</a></div>`
                   : d.status === "failed" ? `<div class="notice">${t("not_in_drive")}</div>` : ""}
       <dl class="fields">${fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
       <details><summary class="meta">${t("ocr_text")}</summary><pre>${esc(d.ocr_text || "")}</pre></details>
       <div class="footer-actions">
         <a href="#/recent" class="meta">${t("back_recent")}</a>
-        <button class="small danger" id="del">${t("delete")}</button>
+        <button class="small danger" id="del">${icon("trash-2")} ${t("delete")}</button>
       </div>
     </div>`;
   wireDecide(view, d.id);
@@ -517,6 +535,53 @@ async function joinView(token) {
   if (js) js.addEventListener("click", () => { try { localStorage.setItem("pa_pending_invite", token); } catch {} });
 }
 
+// ---------- admin: the allow-list ----------
+
+async function adminView() {
+  if (gate()) return;
+  if (!state.admin) { view.innerHTML = `<div class="empty">${t("not_found")}</div>`; return; }
+  view.innerHTML = `<div class="empty">${t("loading")}</div>`;
+  let data, costs = null;
+  try { data = await api("/api/admin/allowlist"); } catch (err) { view.innerHTML = `<div class="empty">${esc(err.message)}</div>`; return; }
+  try { costs = await api("/api/costs"); } catch {}
+  const F = t("fields");
+  view.innerHTML = `
+    <div class="card">
+      <h3>${t("admin_title")}</h3>
+      <div class="meta">${t("admin_hint")}</div>
+      <div class="meta" style="margin-top:6px">${esc(t("admin_bootstrap", data.bootstrap || "—"))}</div>
+      <table class="admin" style="margin-top:10px"><thead><tr><th>${t("entry")}</th><th>${t("role")}</th><th>${t("note")}</th><th>${t("added")}</th><th></th></tr></thead>
+      <tbody id="rows"></tbody></table>
+      <div class="addrow">
+        <input id="newEntry" class="full" placeholder="${esc(t("entry"))}" autocomplete="off" inputmode="email">
+        <input id="newNote" placeholder="${esc(t("note"))}">
+        <select id="newRole"><option value="member">${t("role_member")}</option><option value="admin">${t("role_admin")}</option></select>
+        <button class="small full" id="addBtn">${icon("plus")} ${t("add")}</button>
+      </div>
+    </div>
+    ${costs ? `<div class="card"><h3>${t("costs_title")}</h3>
+      <span class="stat"><b>${esc(costs.attempts)}</b>${t("attempts")}</span>
+      <span class="stat"><b>¥${Math.round(costs.total_usd * 150).toLocaleString()}</b>${t("spend")}</span>
+      <span class="stat"><b>¥${(costs.avg_usd_per_scan * 150).toFixed(1)}</b>${t("avg_scan")}</span>
+      <div class="meta" style="margin-top:8px">US$${Number(costs.total_usd).toFixed(3)} · ${costs.users} user(s) · since ${costs.since ? String(costs.since).slice(0, 10) : "—"}</div></div>` : ""}`;
+  const rows = $("#rows");
+  for (const e of data.entries) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${esc(e.email)}</td><td>${e.role === "admin" ? t("role_admin") : t("role_member")}</td><td class="meta">${esc(e.note || "")}</td><td class="meta">${esc(String(e.created_at).slice(0, 10))}</td>
+      <td><button class="small danger" data-rm="${esc(e.email)}" title="${t("remove")}">${icon("trash-2")}</button></td>`;
+    rows.appendChild(tr);
+  }
+  rows.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm(t("confirm_remove_entry", b.dataset.rm))) return;
+    try { await api(`/api/admin/allowlist/${encodeURIComponent(b.dataset.rm)}`, { method: "DELETE" }); adminView(); } catch (err) { alert(err.message); }
+  }));
+  $("#addBtn").addEventListener("click", async () => {
+    const email = $("#newEntry").value.trim(); if (!email) return;
+    try { await postJson("/api/admin/allowlist", { email, role: $("#newRole").value, note: $("#newNote").value.trim() || null }); adminView(); }
+    catch (err) { alert(t("save_failed", err.message)); }
+  });
+}
+
 // ---------- share (QR) ----------
 
 async function shareView() {
@@ -541,9 +606,9 @@ async function shareView() {
       <div class="qr" id="qrApp"></div>
       <div class="url">${esc(appUrl)}</div>
       <div class="decide">
-        <button data-copy="${esc(appUrl)}">${t("copy")}</button>
-        ${navigator.share ? `<button data-share="${esc(appUrl)}">${t("share_native")}</button>` : ""}
-        <button id="printBtn">${t("print")}</button>
+        <button data-copy="${esc(appUrl)}">${icon("copy")} ${t("copy")}</button>
+        ${navigator.share ? `<button data-share="${esc(appUrl)}">${icon("link")} ${t("share_native")}</button>` : ""}
+        <button id="printBtn">${icon("printer")} ${t("print")}</button>
       </div>
     </div>
     ${canInvite ? `
@@ -599,7 +664,7 @@ function actionLine(d) {
   if (!d.action_required) return "";
   const due = dueInfo(d.action_date);
   const kind = d.action_type ? tt("action", d.action_type) : t("action_required");
-  return `<div class="action">⚠ ${esc(kind)}${due.text ? " · " + due.text : ""}</div>`;
+  return `<div class="action">${icon("triangle-alert")} ${esc(kind)}${due.text ? " · " + due.text : ""}</div>`;
 }
 
 function costLine(c) {
@@ -631,7 +696,7 @@ function resultCard(data) {
   el.className = "card";
   const money = x.amount != null ? `${x.currency || ""} ${Number(x.amount).toLocaleString()}` : null;
   let drive = "";
-  if (data.filed) drive = `<div class="drive">📁 <a href="${esc(data.filed.link)}" target="_blank" rel="noopener">${esc(data.filed.path)}</a></div>`;
+  if (data.filed) drive = `<div class="drive">${icon("folder-open")} <a href="${esc(data.filed.link)}" target="_blank" rel="noopener">${esc(data.filed.path)}</a></div>`;
   else if (data.filing_error === "reconnect_google") drive = `<div class="notice">${t("reconnect", "/auth/login")}</div>`;
   else if (data.filing_error === "owner_no_drive") drive = `<div class="meta">${state.signedIn ? t("not_filed") : t("not_filed_self")}</div>`;
   else if (data.filing_error) drive = `<div class="notice">${t("filing_failed")}</div>`;
@@ -677,6 +742,7 @@ function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 applyLang();
+paintIcons();
 (async () => {
   // A pasted invite link is /join/<token>; turn it into the hash route.
   const m = location.pathname.match(/^\/join\/([A-Za-z0-9_-]{20,64})$/);

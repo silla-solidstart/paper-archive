@@ -1,6 +1,8 @@
 import type { Env } from "./types.ts";
 import type { UserRow } from "./db.ts";
 import { updateUserTokens, upsertGoogleUser } from "./db.ts";
+import { accessFor } from "./allow.ts";
+import { notInvitedPage } from "./gate.ts";
 import {
   b64url,
   clearSessionCookie,
@@ -37,10 +39,17 @@ export function oauthConfigured(env: Env): boolean {
   );
 }
 
-export async function login(env: Env): Promise<Response> {
+/** Only same-origin paths may be a post-login destination. */
+export function safeNext(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return "/";
+  return raw.slice(0, 512);
+}
+
+export async function login(env: Env, next = "/"): Promise<Response> {
   if (!oauthConfigured(env)) return new Response("Google sign-in not configured", { status: 503 });
 
-  const state = b64url(crypto.getRandomValues(new Uint8Array(16)));
+  // state = nonce + destination, both covered by the cookie signature.
+  const state = `${b64url(crypto.getRandomValues(new Uint8Array(16)))}.${b64url(new TextEncoder().encode(safeNext(next)))}`;
   const params = new URLSearchParams({
     client_id: env.GOOGLE_OAUTH_CLIENT_ID,
     redirect_uri: env.GOOGLE_OAUTH_REDIRECT_URI,
@@ -113,6 +122,9 @@ export async function callback(request: Request, env: Env): Promise<Response> {
   if (!tokens.id_token || !tokens.refresh_token) {
     return new Response("Google did not return the expected tokens", { status: 502 });
   }
+  const nextPath = (() => {
+    try { return safeNext(new TextDecoder().decode(unb64url(state.split(".")[1] ?? ""))); } catch { return "/"; }
+  })();
 
   // The id_token arrived from Google's token endpoint over TLS in this same
   // exchange, so its payload is trusted without re-verifying the JWS.
@@ -121,6 +133,11 @@ export async function callback(request: Request, env: Env): Promise<Response> {
     email: string;
     name?: string;
   };
+
+  // The allow-list is enforced here, before any session or user row exists.
+  if (!(await accessFor(env, claims.email)).allowed) {
+    return notInvitedPage(claims.email ?? "");
+  }
 
   const user = await upsertGoogleUser(env, {
     sub: claims.sub,
@@ -131,7 +148,7 @@ export async function callback(request: Request, env: Env): Promise<Response> {
     expiresAt: new Date(Date.now() + tokens.expires_in * 1000),
   });
 
-  const headers = new Headers({ Location: "/" });
+  const headers = new Headers({ Location: nextPath });
   headers.append("Set-Cookie", await createSessionCookie(env, user.id));
   headers.append("Set-Cookie", setCookie(STATE_COOKIE, "", { maxAge: 0, path: "/auth" }));
   return new Response(null, { status: 302, headers });

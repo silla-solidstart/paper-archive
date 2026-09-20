@@ -12,6 +12,8 @@ import { base64url, pemToPkcs8 } from "../src/google-auth.ts";
 import { sign, verify, encrypt, decrypt, readSession, createSessionCookie } from "../src/session.ts";
 import { isRetryable, UpstreamError, withRetry } from "../src/retry.ts";
 import { cleanName, newInviteToken } from "../src/spaces.ts";
+import { matches, normaliseEntry, parseList } from "../src/allow.ts";
+import { safeNext } from "../src/oauth.ts";
 import type { Env } from "../src/types.ts";
 
 const env = { SESSION_SECRET: "test-secret-not-real" } as Env;
@@ -135,4 +137,26 @@ test("spaces: invite tokens are url-safe, 32 chars, and unique", () => {
   const a = newInviteToken(), b = newInviteToken();
   assert.match(a, /^[A-Za-z0-9_-]{32}$/);
   assert.notEqual(a, b);
+});
+
+test("allow-list: exact emails and @domains, case-insensitive; entries normalise", () => {
+  const entries = parseList("Silla@solidstart.jp, @family.example ; partner@x.io");
+  assert.ok(matches("silla@solidstart.jp", entries));
+  assert.ok(matches("SILLA@SolidStart.JP", entries));
+  assert.ok(matches("anyone@family.example", entries));
+  assert.equal(matches("someone@solidstart.jp", entries), false); // email listed, domain not
+  assert.equal(matches("silla@solidstart.jp", new Set()), false);
+  assert.equal(matches("", entries), false);
+  assert.equal(normaliseEntry("  Bob@Example.COM "), "bob@example.com");
+  assert.equal(normaliseEntry("@Example.com"), "@example.com");
+  assert.equal(normaliseEntry("not an email"), null);
+  assert.equal(normaliseEntry("@nodot"), null);
+});
+
+test("safeNext: only same-origin paths survive", () => {
+  assert.equal(safeNext("/join/abc"), "/join/abc");
+  assert.equal(safeNext("https://evil.example/"), "/");
+  assert.equal(safeNext("//evil.example"), "/");
+  assert.equal(safeNext(null), "/");
+  assert.equal(safeNext("/x".repeat(600)).length, 512);
 });
