@@ -25,6 +25,8 @@ body { font: 16px/1.5 -apple-system, "Hiragino Sans", "Noto Sans JP", system-ui,
 .wordmark { font: 600 17px/1 'IBM Plex Sans JP', -apple-system, system-ui, sans-serif; letter-spacing: -0.01em; }
 .who { font-size: 13px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .who a { color: var(--accent); }
+.who a.gsi { color: #1f1f1f; }
+@media (prefers-color-scheme: dark) { .who a.gsi { color: #e3e3e3; } }
 
 main { max-width: 600px; margin: 0 auto; padding: 16px; }
 h2 { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 8px 0 10px; }
@@ -46,8 +48,20 @@ button.small i[data-icon] { margin-right: 5px; }
 .scan { display: block; width: 100%; padding: 32px 16px; font-size: 22px; font-weight: 700; color: var(--accent-fg);
         background: var(--accent); border: 0; border-radius: 18px; cursor: pointer; }
 .scan:disabled { opacity: .5; }
-.signin { display: inline-block; padding: 10px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--card);
-          color: var(--fg); text-decoration: none; font-weight: 600; }
+/* Google's standard "Sign in with Google" button — see src/google-button.ts for the spec. */
+  .gsi { display: inline-flex; align-items: center; height: 40px; padding: 0 12px; box-sizing: border-box;
+         border-radius: 4px; border: 1px solid #747775; background: #fff; color: #1f1f1f;
+         font: 500 14px/20px Roboto, -apple-system, 'Hiragino Sans', 'Noto Sans JP', Arial, sans-serif;
+         letter-spacing: .25px; text-decoration: none; cursor: pointer; white-space: nowrap; user-select: none;
+         transition: background-color .2s, box-shadow .2s; }
+  .gsi:hover { box-shadow: 0 1px 2px rgba(60,64,67,.30), 0 1px 3px 1px rgba(60,64,67,.15); }
+  .gsi:focus-visible { outline: 2px solid #4285f4; outline-offset: 2px; }
+  .gsi-g { width: 20px; height: 20px; margin-right: 10px; flex: none; }
+  @media (prefers-color-scheme: dark) {
+    .gsi { background: #131314; color: #e3e3e3; border-color: #8e918f; }
+    .gsi:hover { box-shadow: 0 1px 2px rgba(0,0,0,.6); }
+  }
+
 
 details.token { margin: 12px 0; font-size: 13px; color: var(--muted); }
 details.token input { width: 100%; margin-top: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 8px;

@@ -159,7 +159,10 @@ export default {
     if (!path.startsWith("/api/")) {
       // Static app: public paths pass through; everything else needs an allowed session.
       if (PUBLIC_PATH.test(path) || (await sessionUser(request, env))) return env.ASSETS.fetch(request);
-      return signInPage(path + url.search);
+      const q = url.searchParams.get("lang");
+      const lang = q === "ja" || q === "en" ? q : requestLang(request);
+      const nextParam = url.searchParams.get("next");
+      return signInPage(nextParam && nextParam.startsWith("/") ? nextParam : path + url.search, lang);
     }
 
     const caller = await resolveCaller(request, env);

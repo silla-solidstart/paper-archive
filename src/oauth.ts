@@ -136,7 +136,8 @@ export async function callback(request: Request, env: Env): Promise<Response> {
 
   // The allow-list is enforced here, before any session or user row exists.
   if (!(await accessFor(env, claims.email)).allowed) {
-    return notInvitedPage(claims.email ?? "");
+    const ja = /^ja\b/i.test(request.headers.get("Accept-Language") ?? "");
+    return notInvitedPage(claims.email ?? "", ja ? "ja" : "en");
   }
 
   const user = await upsertGoogleUser(env, {
