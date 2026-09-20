@@ -55,6 +55,7 @@ const STR = {
     preparing: "Preparing…", reading: (kb) => `Reading ${kb} KB… (OCR, then understanding)`,
     failed: "Failed", need_auth: "Sign in, or paste an API token below.",
     dry_hint: "Test run — nothing was saved.", view_photo: "View photo", photo_missing: "Photo not found.",
+    ios_hint: "Add to your Home Screen: Share → Add to Home Screen", dismiss: "Dismiss",
     retention: { digital_sufficient: "◎ Digital copy likely sufficient", keep_temporarily: "◍ Keep temporarily", keep_original: "◑ Keep original", unsure: "⚠ Unsure — your call" },
     decide: { digital_sufficient: "Digital is enough", keep_temporarily: "Keep for now", keep_original: "Keep original" },
     action_required: "Action required", action: { payment: "payment", appointment: "appointment", renewal: "renewal", signature: "signature", response: "response", cancellation: "cancellation" },
@@ -117,6 +118,7 @@ const STR = {
     preparing: "準備中", reading: (kb) => `${kb} KB を読み取り中（OCRのあと解析）`,
     failed: "失敗", need_auth: "ログインするか、下にAPIトークンを入力してください。",
     dry_hint: "テスト実行のため保存していません。", view_photo: "写真を見る", photo_missing: "写真が見つかりません。",
+    ios_hint: "ホーム画面に追加できます：共有 → ホーム画面に追加", dismiss: "閉じる",
     retention: { digital_sufficient: "◎ デジタルで十分", keep_temporarily: "◍ しばらく保管", keep_original: "◑ 原本を保管", unsure: "⚠ 判断が必要" },
     decide: { digital_sufficient: "デジタルで十分", keep_temporarily: "しばらく保管", keep_original: "原本を保管" },
     action_required: "要対応", action: { payment: "支払い", appointment: "予約", renewal: "更新", signature: "署名", response: "回答", cancellation: "解約" },
@@ -331,10 +333,13 @@ async function scanView() {
       <div style="margin-top:18px"><button class="upload" id="uploadBtn">${icon("upload")} ${t("upload")}</button></div>
       ${state.signedIn ? "" : `<details class="token" id="tokenBox"><summary>${t("api_token_link")}</summary>
         <input id="token" type="password" placeholder="APP_BEARER_TOKEN" autocomplete="off" value="${esc(state.token)}"></details>`}
+      ${iosHint()}
     </div>
     <div class="status" id="status"></div>
     <div id="result"></div>`;
   $("#scanBtn").addEventListener("click", () => fileCam.click());
+  const hint = $("#iosHint");
+  if (hint) hint.querySelector("button").addEventListener("click", () => { try { localStorage.setItem("pa_ios_hint", "1"); } catch {} hint.remove(); });
   $("#uploadBtn").addEventListener("click", () => fileUp.click());
   const tokenEl = $("#token");
   if (tokenEl) tokenEl.addEventListener("change", async () => {
@@ -838,6 +843,15 @@ const fmtMoney = (n, cur = "JPY") => {
   if (!Number.isFinite(v)) return "";
   return cur === "JPY" || !cur ? `¥${Math.round(v).toLocaleString()}` : `${cur} ${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 };
+
+/** iPhone Safari cannot prompt to install a web app; the one-line hint says where the menu is. */
+function iosHint() {
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const standalone = window.navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+  let dismissed = false; try { dismissed = Boolean(localStorage.getItem("pa_ios_hint")); } catch {}
+  if (!ios || standalone || dismissed) return "";
+  return `<div class="ioshint" id="iosHint">${icon("plus")} <span>${t("ios_hint")}</span><button class="link" aria-label="${esc(t("dismiss"))}">${icon("x")}</button></div>`;
+}
 
 /** The stored photo: a thumbnail that opens the original (same-origin, so the session cookie applies). */
 function photoBlock(id, stored) {

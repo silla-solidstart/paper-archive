@@ -148,10 +148,22 @@ async function resolveCaller(request: Request, env: Env): Promise<Caller | Respo
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const path = url.pathname;
     // Correlates a client-visible failure with the server log line.
     const rid = crypto.randomUUID().slice(0, 8);
+    try {
+      return await handle(request, env, rid);
+    } catch (err) {
+      // Anything uncaught would surface as Cloudflare's bare "error code: 1101"
+      // page. Log it with the id and answer JSON the client can show.
+      console.error(`[${rid}] unhandled:`, err);
+      return json({ error: "internal error", request_id: rid }, 500);
+    }
+  },
+} satisfies ExportedHandler<Env>;
+
+async function handle(request: Request, env: Env, rid: string): Promise<Response> {
+    const url = new URL(request.url);
+    const path = url.pathname;
 
     // Unauthenticated: liveness only. Nothing about configuration leaks here.
     if (path === "/health") return json({ ok: true });
@@ -354,7 +366,7 @@ export default {
         if (!row) return json({ error: "not found" }, 404);
         // The filename was built before the sender was known.
         let renamed: string | null = null;
-        if (row.mime_type && row.status !== "processing") {
+        if (row.mime_type && row.status !== "pending") {
           renamed = buildFilename({ document_date: row.document_date, issuer: row.issuer, title: row.title ?? "" }, row.mime_type, row.created_at.slice(0, 10));
           await updateDocumentFiling(env, id, { filename: renamed, status: row.status as "complete" | "failed", error: row.error });
         }
@@ -546,8 +558,7 @@ export default {
     }
 
     return json({ error: "not found" }, 404);
-  },
-} satisfies ExportedHandler<Env>;
+}
 
 /** What the client gets back about the stored original. */
 interface Filed { filename: string; url: string }

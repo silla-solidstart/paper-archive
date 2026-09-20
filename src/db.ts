@@ -253,7 +253,7 @@ export async function insertStagedDocument(
 ): Promise<string> {
   const rows = await sql(env).query(
     `INSERT INTO documents (space_id, user_id, filename, mime_type, bytes, lang, status, title)
-     VALUES ($1, $2, $3, $4, $5, $6, 'processing', $3) RETURNING id`,
+     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $3) RETURNING id`,
     [spaceId, userId, f.filename, f.mimeType, f.bytes, f.lang],
   );
   return (rows as Array<{ id: string }>)[0].id;
@@ -265,7 +265,7 @@ export async function setDocumentStorage(env: Env, id: string, storageKey: strin
 
 /** A staged row whose bytes never made it to storage: nothing to keep. */
 export async function discardDocument(env: Env, id: string): Promise<void> {
-  await sql(env).query(`DELETE FROM documents WHERE id = $1 AND status = 'processing'`, [id]);
+  await sql(env).query(`DELETE FROM documents WHERE id = $1 AND status = 'pending'`, [id]);
 }
 
 export async function setDocumentOcr(env: Env, id: string, ocr: OcrResult): Promise<void> {
