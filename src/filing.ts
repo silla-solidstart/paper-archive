@@ -24,7 +24,7 @@ const EXT: Record<string, string> = {
   "application/pdf": "pdf",
 };
 
-export function buildFilename(x: Extraction, mimeType: string, fallbackDate: string): string {
+export function buildFilename(x: Pick<Extraction, "document_date" | "issuer" | "title">, mimeType: string, fallbackDate: string): string {
   const date = x.document_date ?? fallbackDate;
   // Strip path separators, Windows-reserved punctuation, and control characters.
   const clean = (s: string | null): string =>
