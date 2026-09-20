@@ -97,7 +97,7 @@ const STR = {
     admin: "Admin", admin_title: "Who can sign in", admin_hint: "Invite-only. Add an email, or @domain for everyone at a domain. Removal takes effect on their next request.",
     admin_bootstrap: (list) => `Always allowed (config): ${list}`, entry: "Email or @domain", role: "Role", note: "Note (optional)", added: "Added", add: "Add",
     role_admin: "admin", role_member: "member", confirm_remove_entry: (e) => `Remove ${e} from the allow-list?`,
-    costs_title: "Costs, all users", attempts: "scans", spend: "spend", avg_scan: "avg / scan",
+    costs_title: "Costs, all users", attempts: "scans", spend: "spend", avg_scan: "avg / scan", by_user: "By user", this_month: "this month", reanalyses_n: (n) => `${n} re-read${n === 1 ? "" : "s"}`,
     // v2: labels, sender, expenses, re-analysis
     handling: { todo: "To do", expense: "Expense", record: "Record", notice: "Notice", noise: "Junk" },
     expense_kind: { groceries: "Groceries", dining: "Dining", transport: "Transport", utilities: "Utilities", housing: "Housing", medical: "Medical", education: "Education", clothing: "Clothing", household: "Household", electronics: "Electronics", entertainment: "Entertainment", subscription: "Subscription", insurance: "Insurance", tax: "Tax", business: "Business", other: "Other" },
@@ -161,7 +161,7 @@ const STR = {
     admin: "管理", admin_title: "ログインできる人", admin_hint: "招待制です。メールアドレスを追加します。ドメイン全体を許可するには @ドメイン の形で追加してください。削除は相手の次回アクセスから反映されます。",
     admin_bootstrap: (list) => `常に許可（設定）: ${list}`, entry: "メールアドレスまたは @ドメイン", role: "権限", note: "メモ（任意）", added: "追加日", add: "追加",
     role_admin: "管理者", role_member: "メンバー", confirm_remove_entry: (e) => `${e} を許可リストから削除しますか？`,
-    costs_title: "費用（全ユーザー）", attempts: "件", spend: "合計", avg_scan: "1件あたり",
+    costs_title: "費用（全ユーザー）", attempts: "件", spend: "合計", avg_scan: "1件あたり", by_user: "ユーザー別", this_month: "今月", reanalyses_n: (n) => `読み取り直し${n}件`,
     handling: { todo: "要対応", expense: "支出", record: "記録", notice: "お知らせ", noise: "広告" },
     expense_kind: { groceries: "食料品", dining: "外食", transport: "交通", utilities: "公共料金", housing: "住まい", medical: "医療", education: "教育", clothing: "衣類", household: "日用品", electronics: "家電", entertainment: "娯楽", subscription: "定期契約", insurance: "保険", tax: "税金", business: "事業", other: "その他" },
     item_category: { groceries: "食料品", snacks: "お菓子", alcohol: "お酒", beverages: "飲料", household: "日用品", dining: "外食", transport: "交通", utilities: "公共料金", medical: "医療", education: "教育", clothing: "衣類", electronics: "家電", entertainment: "娯楽", subscription: "定期契約", fees: "手数料", tax: "税金", business: "事業", other: "その他" },
@@ -707,7 +707,11 @@ async function adminView() {
       <span class="stat"><b>${esc(costs.attempts)}</b>${t("attempts")}</span>
       <span class="stat"><b>¥${Math.round(costs.total_usd * 150).toLocaleString()}</b>${t("spend")}</span>
       <span class="stat"><b>¥${(costs.avg_usd_per_scan * 150).toFixed(1)}</b>${t("avg_scan")}</span>
-      <div class="meta" style="margin-top:8px">US$${Number(costs.total_usd).toFixed(3)} · ${costs.users} user(s) · since ${costs.since ? String(costs.since).slice(0, 10) : "—"}</div></div>` : ""}`;
+      <div class="meta" style="margin-top:8px">US$${Number(costs.total_usd).toFixed(3)} · ${costs.users} user(s) · since ${costs.since ? String(costs.since).slice(0, 10) : "—"}</div>
+      ${Array.isArray(costs.by_user) && costs.by_user.length ? `<h3 style="margin-top:14px">${t("by_user")}</h3>
+      ${costs.by_user.map((u) => `<div class="allowrow"><div><b>${esc(u.name || u.email)}</b>${u.name ? `<div class="meta">${esc(u.email)}</div>` : ""}
+        <div class="meta">${esc(u.attempts)} ${t("attempts")}${u.reanalyses ? ` · ${t("reanalyses_n", u.reanalyses)}` : ""} · ¥${(u.total_usd * 150 / Math.max(1, u.attempts)).toFixed(1)} ${t("avg_scan")} · ${u.last_at ? String(u.last_at).slice(0, 10) : ""}</div></div>
+        <div style="text-align:right"><b>¥${Math.round(u.total_usd * 150).toLocaleString()}</b><div class="meta">¥${Math.round(u.month_usd * 150).toLocaleString()} ${t("this_month")}</div></div></div>`).join("")}` : ""}</div>` : ""}`;
   const rows = $("#rows");
   for (const e of data.entries) {
     const row = document.createElement("div");

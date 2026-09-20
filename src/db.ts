@@ -619,7 +619,20 @@ export async function costSummary(env: Env, userId: string | null): Promise<Reco
      FROM scan_costs ${where} GROUP BY 1 ORDER BY 3 DESC`,
     params,
   )) as Record<string, unknown>[];
-  return { ...totals, by_month: byMonth, by_model: byModel, by_space: bySpace, by_kind: byKind };
+  // Per user: who is costing what. Deleted users show as "(deleted)"; the
+  // rows survive by design (see migration 0003).
+  const byUser = (await q.query(
+    `SELECT coalesce(u.email, '(deleted)') AS email, u.name,
+            count(*)::int AS attempts,
+            count(*) FILTER (WHERE c.kind = 'reanalyze')::int AS reanalyses,
+            coalesce(sum(c.total_usd), 0)::float AS total_usd,
+            coalesce(sum(c.total_usd) FILTER (WHERE date_trunc('month', c.created_at) = date_trunc('month', now())), 0)::float AS month_usd,
+            max(c.created_at) AS last_at
+     FROM scan_costs c LEFT JOIN users u ON u.id = c.user_id ${where.replace("user_id", "c.user_id")}
+     GROUP BY 1, 2 ORDER BY 5 DESC LIMIT 50`,
+    params,
+  )) as Record<string, unknown>[];
+  return { ...totals, by_month: byMonth, by_model: byModel, by_space: bySpace, by_kind: byKind, by_user: byUser };
 }
 
 export async function listRecent(
