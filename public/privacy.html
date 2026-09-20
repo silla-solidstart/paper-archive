@@ -4,65 +4,215 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="stylesheet" href="/styles.css">
-<title>Privacy — Paper Archive</title>
+<link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
+<title>Privacy Policy — Paper Archive</title>
+<meta name="description" content="How Paper Archive collects, uses, stores and deletes your data.">
 <style>
-  main { max-width: 640px; }
-  h1 { font-size: 22px; margin: 8px 0 4px; }
-  h2 { text-transform: none; letter-spacing: 0; font-size: 17px; color: var(--fg); margin: 22px 0 6px; }
-  p, li { font-size: 15px; }
-  .draft { padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-fg); font-size: 14px; }
-  hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+  main { max-width: 680px; }
+  h1 { font-size: 24px; margin: 8px 0 4px; }
+  h2 { text-transform: none; letter-spacing: 0; font-size: 18px; color: var(--fg); margin: 26px 0 6px; }
+  h3 { font-size: 15px; margin: 14px 0 4px; }
+  p, li { font-size: 15px; line-height: 1.6; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 0; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px 6px 0; border-top: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
+  .toc a { color: var(--hi); }
+  nav.lang { font-size: 14px; margin: 6px 0 14px; } nav.lang a { color: var(--hi); }
 </style>
 </head>
 <body>
 <header class="top"><div class="brand"><a href="/" style="color:inherit;text-decoration:none">Paper Archive</a></div></header>
-<main>
+<main id="top">
+  <nav class="lang"><a href="#ja">日本語</a></nav>
   <h1>Privacy Policy</h1>
-  <p class="meta">Effective 2026-09-18 · Operated by SolidStart (solidstart.jp) · Contact: privacy@solidstart.jp</p>
-  <p class="draft">Draft. Review before the consent screen is published; adjust the contact address and legal entity name.</p>
+  <p class="meta">Effective 20 September 2026 · Last updated 20 September 2026</p>
+  <p>Paper Archive (<a href="https://pa.solidstart.jp">pa.solidstart.jp</a>, "the Service") is operated by SolidStart, Jōetsu, Niigata, Japan ("we", "us"). Contact: <a href="mailto:privacy@solidstart.jp">privacy@solidstart.jp</a>. This policy explains what data the Service collects, why, where it is stored, who processes it, how long it is kept, and how you can delete it.</p>
 
-  <h2>What Paper Archive does</h2>
-  <p>You photograph a paper document. We read the text from it, work out what the document is and what it asks of you, store the photo, and keep a searchable index so you can find it later.</p>
+  <h2>1. What the Service does</h2>
+  <p>You photograph a paper document — mail, a bill, a receipt, a school letter. The Service reads the text from the photo, works out what the document is and what it asks of you (a payment, a signature, a deadline), labels it, itemises receipts into a spending record, stores the photo, and keeps a searchable index so you can find the document again after the paper is gone. It also suggests whether the paper original is worth keeping.</p>
 
-  <h2>What we store, and where</h2>
+  <h2>2. Information we collect</h2>
+  <h3>2.1 Your Google account</h3>
+  <p>You sign in with Google. From Google we receive your account identifier, email address and display name, and we store them. We request only the basic sign-in scopes (<code>openid</code>, <code>email</code>, <code>profile</code>). We do not request or access Google Drive, Gmail, Contacts, Calendar or any other Google data.</p>
+  <h3>2.2 Documents you upload</h3>
   <ul>
-    <li><strong>The document itself</strong>: the photo you take is stored privately in this service's storage (Cloudflare R2, Asia-Pacific region). Only members of the archive it belongs to can open it. We do not share it with anyone else.</li>
-    <li><strong>The text and metadata</strong> extracted from each document — the recognised text, title, issuer, dates, amounts, what action it requires, and whether the original is likely worth keeping — are stored in our database so that search and reminders work.</li>
-    <li><strong>Your account</strong>: the Google account identifier, email address and name you sign in with. We do not access your Google Drive or any other Google data.</li>
+    <li><strong>The photo or PDF</strong> you upload, stored unchanged.</li>
+    <li><strong>Text recognised from it</strong> (OCR).</li>
+    <li><strong>Data derived from it</strong>: title, sender, dates, amounts, reference numbers, document type, topic labels, what action it requires and by when, whether the original is worth keeping, keywords, tables found in the document, and for receipts and bills the merchant, totals, tax, payment method and individual line items with a category (for example groceries, snacks, household).</li>
+    <li><strong>Corrections you make</strong>: a sender you type in, a retention decision you set.</li>
+    <li><strong>A history of each automated reading</strong> of the document, so a later re-analysis never loses earlier results.</li>
+  </ul>
+  <p>Documents often contain personal data about you and about other people (names, addresses, account numbers, amounts). You are responsible for what you upload; upload only documents you are entitled to keep.</p>
+  <h3>2.3 Archives and sharing</h3>
+  <p>Every user has one archive. You can invite other people into your archive with a link; anyone who accepts sees every document in that archive, including the photos, and can add documents to it. We store who is a member of which archive, who created each invite, and who added each document.</p>
+  <h3>2.4 Usage and cost records</h3>
+  <p>For each document reading we record when it happened, which archive it belonged to, the size of the upload, how many pages were read, how many model tokens were used and what that cost, and how long it took. These records are used for operating the Service and understanding its costs. When a document or account is deleted, its cost records are kept but the link to the document and the account is removed, so they no longer identify you.</p>
+  <h3>2.5 Technical data</h3>
+  <ul>
+    <li><strong>Cookies</strong>: a signed session cookie that keeps you signed in, and a short-lived cookie used during Google sign-in. Both are essential; there are no advertising or analytics cookies.</li>
+    <li><strong>On your device</strong>: your language choice and, for operators, an API token, kept in the browser's local storage; the app shell is cached for offline loading. Nothing else is stored on the device.</li>
+    <li><strong>Server logs</strong>: request logs (IP address, user agent, time, path, status) kept by our hosting provider for security and debugging, with short retention. Error logs contain a request identifier, not document contents.</li>
+  </ul>
+  <p>We do not use analytics services, advertising identifiers or tracking pixels.</p>
+
+  <h2>3. How we use information</h2>
+  <ul>
+    <li>To provide the Service: read, interpret, label, store, search and display your documents; show deadlines; summarise spending.</li>
+    <li>To let you share an archive with people you invite.</li>
+    <li>To keep the Service secure: sign-in, access control (only members of an archive can open its documents), abuse prevention.</li>
+    <li>To operate and improve the Service: monitoring errors, measuring cost per document, and improving how documents are read. We do not use your documents to train machine-learning models, and our processors are contractually prevented from doing so.</li>
+  </ul>
+  <p>We do not show advertising, and we do not sell, rent or trade personal data.</p>
+
+  <h2>4. Google user data</h2>
+  <p>Paper Archive's use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements. Specifically: the Google account identifier, email address and name are used only to sign you in, to show who you are to other members of an archive you share, and to manage access to the Service. They are not used for advertising, are not sold, and are not transferred to anyone except as needed to provide the Service or as required by law.</p>
+
+  <h2>5. Who processes your data</h2>
+  <p>We use the following providers. Each processes data only to provide its service to us, under terms that prohibit using the data for their own purposes or for training models.</p>
+  <table>
+    <tr><th>Provider</th><th>What</th><th>Where</th></tr>
+    <tr><td>Cloudflare</td><td>Hosting of the application; storage of your photos and PDFs (R2); request logs</td><td>Photos stored in the Asia-Pacific region; the application runs on Cloudflare's global network</td></tr>
+    <tr><td>Neon</td><td>Database: recognised text, derived data, accounts, archives, usage records</td><td>Singapore</td></tr>
+    <tr><td>Google Cloud (Document AI)</td><td>Text recognition on each uploaded photo or PDF</td><td>Singapore</td></tr>
+    <tr><td>Anthropic (Claude)</td><td>Interpreting the recognised text and the photo: what the document is, what it asks, line items</td><td>United States</td></tr>
+    <tr><td>Google (Sign in with Google)</td><td>Authentication</td><td>Google's infrastructure</td></tr>
+  </table>
+  <p>Other than these providers and the members of an archive you share, we disclose personal data only when required by law or to protect the rights, safety or property of users or the Service.</p>
+
+  <h2>6. Where data is stored and international transfers</h2>
+  <p>We are based in Japan. Your data is processed by the providers above in Singapore, the United States and on Cloudflare's network. Where data leaves Japan we rely on the providers' contractual commitments and security measures described in their terms.</p>
+
+  <h2>7. How long we keep data</h2>
+  <ul>
+    <li><strong>Documents</strong> (photo, text, derived data, reading history): until you delete the document or your account.</li>
+    <li><strong>Account and archive membership</strong>: until you delete your account.</li>
+    <li><strong>Invite links</strong>: 7 days, or until revoked.</li>
+    <li><strong>Usage and cost records</strong>: kept, without the link to the deleted document or account.</li>
+    <li><strong>Server logs</strong>: short retention set by the hosting provider, typically days.</li>
   </ul>
 
-  <h2>Processing partners</h2>
-  <p>To read and understand documents we send them to Google Cloud Document AI (text recognition) and Anthropic's Claude (interpretation). These providers process the data to provide the service and do not use it to train their models under the terms we use. Data is processed in Singapore (Document AI) and the United States (Anthropic).</p>
+  <h2>8. Security</h2>
+  <p>All traffic uses HTTPS. Photos and database contents are encrypted at rest by the providers. Access to a document requires a valid session for a member of its archive; photos are never served from a public location, and temporary links to a photo expire within minutes. Sessions are signed and cannot be forged. Credentials for our providers are kept in a secrets manager, never in code. No system is perfectly secure; if we learn of a breach affecting your data we will inform you.</p>
 
-  <h2>What we do not do</h2>
+  <h2>9. Your choices and rights</h2>
   <ul>
-    <li>We do not sell or share your data with advertisers or data brokers.</li>
-    <li>We do not use your documents to train models.</li>
+    <li><strong>See and delete documents</strong> in the app at any time. Deleting a document removes the photo, the text, the derived data and the reading history.</li>
+    <li><strong>Leave an archive</strong> someone shared with you, or remove members from your own.</li>
+    <li><strong>Delete your account</strong> and all your data by emailing <a href="mailto:privacy@solidstart.jp">privacy@solidstart.jp</a> from your sign-in address; we delete within 30 days and confirm.</li>
+    <li><strong>Revoke Google sign-in</strong> at any time at <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.</li>
+    <li><strong>Access, correction, portability</strong>: email us and we will provide a copy of your data in a common format or correct it.</li>
   </ul>
+  <p>Where the law of your country grants further rights (for example under the Act on the Protection of Personal Information in Japan, or the GDPR), you may exercise them through the same contact address.</p>
 
-  <h2>Deleting your data</h2>
-  <p>Deleting a document in the app removes it from our index and deletes the stored photo. To delete your account and all data, email the contact address above; we remove it within 30 days.</p>
+  <h2>10. Children</h2>
+  <p>The Service is not directed at children under 13, and we do not knowingly collect data from them. Access is by invitation only.</p>
 
-  <h2>Retention advice is advice</h2>
-  <p>The app suggests whether a paper original can be discarded. It is a suggestion, deliberately conservative, and not legal or tax advice. When unsure, the app says so, and you decide.</p>
+  <h2>11. Retention advice is advice</h2>
+  <p>The Service suggests whether a paper original can be discarded. The suggestion is deliberately conservative and is not legal, tax or financial advice. When the Service is unsure it says so, and the decision is yours.</p>
 
-  <h2>Changes</h2>
-  <p>We will update this page and the effective date when the policy changes.</p>
+  <h2>12. Changes</h2>
+  <p>When this policy changes we update this page and the dates at the top. Material changes are announced in the app.</p>
+
+  <h2>13. Contact</h2>
+  <p>SolidStart · Jōetsu, Niigata, Japan · <a href="mailto:privacy@solidstart.jp">privacy@solidstart.jp</a></p>
 
   <hr>
 
-  <h1 lang="ja">プライバシーポリシー（要約）</h1>
-  <p lang="ja" class="draft">下書きです。公開前に内容と事業者名・連絡先を確認してください。</p>
-  <ul lang="ja">
-    <li><strong>サービスの内容</strong>：紙の書類を撮影していただくと、本サービスが文字を読み取り、何の書類で何を求められているかを判別し、写真を保存します。あとから探せるように、検索用の索引も保持します。</li>
-    <li><strong>写真の保存場所</strong>：撮影した写真は、本サービスのストレージ（Cloudflare R2、アジア太平洋リージョン）に非公開で保存します。開けるのは、その写真が属するアーカイブのメンバーだけです。ほかの誰にも提供しません。</li>
-    <li><strong>当社が保存する情報</strong>：書類から読み取ったテキストと、タイトル・差出人・日付・金額・必要な対応・原本保管の要否などのメタデータ。ログインに使うGoogleアカウントの識別子、メールアドレス、氏名。Googleドライブなど、ほかのGoogleのデータにはアクセスしません。</li>
-    <li><strong>利用目的</strong>：書類の検索、期限の通知、原本保管の判断支援。</li>
-    <li><strong>処理委託先</strong>：Google Cloud Document AI（文字認識、シンガポール）および Anthropic Claude（内容の解釈、米国）。モデルの学習には使用されません。</li>
-    <li><strong>第三者提供</strong>：広告事業者やデータブローカーへの販売・提供は行いません。</li>
-    <li><strong>削除</strong>：アプリで書類を削除すると、索引から削除し、保存した写真も削除します。アカウントとすべてのデータの削除をご希望の場合は、上記の連絡先までメールしてください。30日以内に削除します。</li>
-    <li><strong>原本保管の助言について</strong>：あくまで参考情報であり、法律上・税務上の助言ではありません。</li>
+  <section lang="ja" id="ja">
+  <nav class="lang"><a href="#top">English</a></nav>
+  <h1>プライバシーポリシー</h1>
+  <p class="meta">施行日 2026年9月20日 · 最終更新 2026年9月20日</p>
+  <p>Paper Archive（pa.solidstart.jp、以下「本サービス」）は、SolidStart（新潟県上越市）が運営しています。お問い合わせ先は <a href="mailto:privacy@solidstart.jp">privacy@solidstart.jp</a> です。このページでは、本サービスがどの情報を、何のために取得し、どこに保存し、誰が取り扱い、どのくらいの期間保管し、どうすれば削除できるかをご説明します。</p>
+
+  <h2>1. 本サービスの内容</h2>
+  <p>郵便物、請求書、レシート、学校のお知らせなど、紙の書類をスマホで撮っていただきます。本サービスは、その写真から文字を読み取り、何の書類で、何を求めているか（支払い、署名、期限など）を判断してラベルを付け、レシートは明細ごとに支出の記録にまとめます。写真を保存し、検索できる記録を残すので、紙を手放したあとでもその書類を見つけられます。あわせて、紙の原本を取っておく価値があるかどうかの目安もお伝えします。</p>
+
+  <h2>2. 取得する情報</h2>
+  <h3>2.1 Googleアカウント</h3>
+  <p>ログインにはGoogleアカウントを使います。Googleからはアカウントの識別子、メールアドレス、表示名を受け取り、これらを保存します。要求するのはログインのための基本的な範囲（<code>openid</code>、<code>email</code>、<code>profile</code>）だけです。Googleドライブ、Gmail、連絡先、カレンダーなど、その他のGoogleのデータを要求することも、参照することもありません。</p>
+  <h3>2.2 アップロードされた書類</h3>
+  <ul>
+    <li>アップロードされた写真またはPDF（変更せずそのまま保存します）</li>
+    <li>そこから読み取った文字（OCR）</li>
+    <li>読み取った内容から導き出した情報：タイトル、差出人、日付、金額、整理番号、書類の種類、内容を表すラベル、必要な手続きとその期限、原本を取っておく価値があるかどうか、キーワード、書類に含まれる表。レシートと請求書については、店舗名、合計金額、税額、支払い方法、および分類（食料品、菓子、日用品など）を付けた明細の一件ごとの情報</li>
+    <li>お客様による修正（入力し直した差出人、ご自身で設定した保管の要否など）</li>
+    <li>書類ごとの自動読み取りの履歴（あとから読み取り直しても、それまでの結果が失われないようにするためです）</li>
   </ul>
+  <p>書類には、お客様ご自身や他の方の個人情報（氏名、住所、口座番号、金額など）が含まれていることがよくあります。何をアップロードするかはお客様の責任です。ご自身が保管してよい書類だけをアップロードしてください。</p>
+  <h3>2.3 アーカイブと共有</h3>
+  <p>お客様おひとりにつき、アーカイブは1つです。リンクを送って、ほかの方をご自身のアーカイブに招待できます。招待を受け入れた方は、そのアーカイブにあるすべての書類を写真も含めて見ることができ、書類を追加することもできます。本サービスは、誰がどのアーカイブのメンバーか、どの招待を誰が作成したか、どの書類を誰が追加したかを保存します。</p>
+  <h3>2.4 利用状況と費用の記録</h3>
+  <p>書類を1件読み取るごとに、実行した日時、対象のアーカイブ、アップロードされたデータの大きさ、読み取ったページ数、使用したモデルのトークン数とその費用、処理にかかった時間を記録します。これらは本サービスの運営と、かかる費用の把握に使います。書類やアカウントが削除されたあとも費用の記録は残りますが、書類やアカウントとのひも付けは外すため、個人を特定できる状態ではなくなります。</p>
+  <h3>2.5 技術的な情報</h3>
+  <p><strong>Cookie</strong>：ログイン状態を保つための署名付きのセッションCookieと、Googleでのログインの間だけ使う短期間のCookieを使います。どちらも本サービスの提供に欠かせないものです。広告やアクセス解析のためのCookieは使いません。</p>
+  <p><strong>お使いの端末内</strong>：言語の設定と、運営者向けのAPIトークンを、ブラウザのローカルストレージに保存します。オフラインでも起動できるよう、アプリの外枠をキャッシュします。それ以外は保存しません。</p>
+  <p><strong>サーバーのログ</strong>：セキュリティと不具合の調査のため、ホスティング事業者がリクエストのログ（IPアドレス、ユーザーエージェント、時刻、パス、ステータス）を短い期間だけ保管します。エラーログに残るのはリクエストの識別子で、書類の内容は含みません。</p>
+  <p>アクセス解析サービス、広告識別子、トラッキングピクセルは使っていません。</p>
+
+  <h2>3. 情報の使い方</h2>
+  <ul>
+    <li>本サービスを提供するため（書類の読み取り、内容の判断、ラベル付け、保存、検索、表示、期限の表示、支出のまとめ）</li>
+    <li>招待した方とアーカイブを共有できるようにするため</li>
+    <li>安全を保つため（ログイン、アクセス制御。アーカイブのメンバーだけがその書類を開けます。および不正利用の防止）</li>
+    <li>本サービスを運営し、改善するため（エラーの監視、書類1件あたりの費用の把握、読み取りの精度の改善）</li>
+  </ul>
+  <p>お客様の書類を機械学習モデルの学習に使うことはありません。委託先の事業者にも、契約によってこれを禁じています。広告は表示せず、個人情報の販売、貸与、交換も行いません。</p>
+
+  <h2>4. Googleから取得する情報</h2>
+  <p>Paper Archive の Google API から取得した情報の利用は、Limited Use の要件を含む <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a> に準拠します。</p>
+  <p>具体的には、Googleアカウントの識別子、メールアドレス、氏名は、ログイン、共有しているアーカイブのほかのメンバーにお客様が誰かを表示すること、および本サービスへのアクセス管理にのみ使います。広告には使わず、販売もしません。本サービスの提供に必要な場合と、法令で求められる場合を除き、第三者に提供することもありません。</p>
+
+  <h2>5. データを取り扱う事業者</h2>
+  <p>次の事業者を利用しています。いずれも、当方に役務を提供する目的でのみデータを取り扱い、自社の目的やモデルの学習に使うことは契約で禁じられています。</p>
+  <table>
+    <tr><th>事業者</th><th>取り扱う内容</th><th>場所</th></tr>
+    <tr><td>Cloudflare</td><td>アプリケーションのホスティング、写真とPDFの保存（R2）、リクエストのログ</td><td>写真はアジア太平洋リージョン。アプリケーションはCloudflareのグローバルネットワーク上で動作します</td></tr>
+    <tr><td>Neon</td><td>データベース：読み取った文字、導き出した情報、アカウント、アーカイブ、利用状況の記録</td><td>シンガポール</td></tr>
+    <tr><td>Google Cloud（Document AI）</td><td>アップロードされた写真・PDFの文字の読み取り</td><td>シンガポール</td></tr>
+    <tr><td>Anthropic（Claude）</td><td>読み取った文字と写真の解釈（何の書類か、何を求めているか、明細）</td><td>米国</td></tr>
+    <tr><td>Google（Googleでログイン）</td><td>ログインの認証</td><td>Googleの基盤</td></tr>
+  </table>
+  <p>これらの事業者と、共有しているアーカイブのメンバー以外に個人情報を開示するのは、法令で求められる場合、または利用者もしくは本サービスの権利、安全、財産を守るために必要な場合に限ります。</p>
+
+  <h2>6. データの保存場所と国外への移転</h2>
+  <p>当方は日本を拠点としています。お客様のデータは、上記の事業者により、シンガポール、米国、およびCloudflareのネットワーク上で取り扱われます。データが日本国外に出る場合は、各事業者がその規約で定める契約上の約束と安全管理の措置に依拠しています。</p>
+
+  <h2>7. 保管する期間</h2>
+  <table>
+    <tr><th>データ</th><th>保管する期間</th></tr>
+    <tr><td>書類（写真、読み取った文字、導き出した情報、読み取りの履歴）</td><td>その書類またはアカウントを削除するまで</td></tr>
+    <tr><td>アカウントとアーカイブのメンバー情報</td><td>アカウントを削除するまで</td></tr>
+    <tr><td>招待リンク</td><td>7日間、または取り消すまで</td></tr>
+    <tr><td>利用状況と費用の記録</td><td>削除された書類やアカウントとのひも付けを外したうえで、引き続き保管します</td></tr>
+    <tr><td>サーバーのログ</td><td>ホスティング事業者が定める短い期間（通常は数日）</td></tr>
+  </table>
+
+  <h2>8. 安全の確保</h2>
+  <p>通信はすべてHTTPSを使います。写真とデータベースの内容は、各事業者により保存時に暗号化されます。書類を開くには、そのアーカイブのメンバーとして有効なセッションが必要です。写真が公開の場所から配信されることはなく、写真への一時的なリンクは数分で期限切れになります。セッションには署名があり、偽造できません。事業者の認証情報はシークレットマネージャーで管理し、コードには書きません。完全に安全なシステムは存在しません。お客様のデータに関わる漏えいを把握した場合は、お客様にお知らせします。</p>
+
+  <h2>9. お客様の選択と権利</h2>
+  <ul>
+    <li>書類は、アプリでいつでも確認し、削除できます（削除すると、写真、読み取った文字、導き出した情報、読み取りの履歴がなくなります）。</li>
+    <li>共有されたアーカイブから抜けることも、ご自身のアーカイブからメンバーを外すこともできます。</li>
+    <li>アカウントとすべてのデータの削除をご希望の場合は、ログインに使っているメールアドレスから <a href="mailto:privacy@solidstart.jp">privacy@solidstart.jp</a> にご連絡ください。30日以内に削除し、完了をご連絡します。</li>
+    <li>Googleでのログインの許可は、<a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a> からいつでも取り消せます。</li>
+    <li>開示、訂正、持ち出し（データポータビリティ）：ご連絡いただければ、一般的な形式でデータの写しをお渡しするか、内容を訂正します。</li>
+  </ul>
+  <p>お住まいの国の法律（日本の個人情報の保護に関する法律、EUのGDPRなど）によってさらに権利が認められている場合は、同じ連絡先から行使していただけます。</p>
+
+  <h2>10. お子さまの利用について</h2>
+  <p>本サービスは13歳未満のお子さま向けのものではなく、13歳未満の方の情報を意図して取得することはありません。利用は招待制です。</p>
+
+  <h2>11. 保管の目安はあくまで目安です</h2>
+  <p>本サービスは、紙の原本を手放してよいかどうかの目安をお伝えします。この判断はあえて慎重な側に寄せており、法律、税務、財務に関する助言ではありません。判断がつかないときは、そのことをそのままお伝えします。最終的に決めるのはお客様です。</p>
+
+  <h2>12. 本ポリシーの変更</h2>
+  <p>本ポリシーを変更したときは、このページと冒頭の日付を更新します。重要な変更は、アプリ内でお知らせします。</p>
+
+  <h2>13. お問い合わせ</h2>
+  <p>SolidStart・新潟県上越市・<a href="mailto:privacy@solidstart.jp">privacy@solidstart.jp</a></p>
+  </section>
 </main>
 </body>
 </html>

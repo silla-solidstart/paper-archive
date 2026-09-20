@@ -1,7 +1,12 @@
 /**
- * The pages shown outside the app: sign-in (for anyone not signed in) and
- * "invite only" (for a Google account that is not on the allow-list).
- * Self-contained — no app assets are served to unauthenticated visitors.
+ * The pages shown outside the app: the public homepage (which is also the
+ * sign-in page), "invite only" (for a Google account that is not on the
+ * allow-list), and the share page. Self-contained — no app assets are served
+ * to unauthenticated visitors.
+ *
+ * The homepage is served with 200 and explains what the app does, links the
+ * privacy policy and names the operator: Google's branding verification
+ * requires a homepage that is not "behind a login page".
  */
 
 const MARK = `<svg viewBox="0 0 512 512" width="72" height="72" aria-hidden="true">
@@ -36,6 +41,12 @@ const STYLE = GOOGLE_BUTTON_CSS + `
   a.pill { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 14px; color: var(--muted); text-decoration: none;
            padding: 8px 14px; border: 1px solid rgba(128,128,128,.35); border-radius: 999px; }
   a.pill:hover { color: var(--fg); }
+  /* homepage: what it does, and the footer Google's verification looks for */
+  ul.what { list-style: none; padding: 0; margin: 26px auto 0; max-width: 360px; text-align: left; color: var(--fg); opacity: .85; font-size: 14px; }
+  ul.what li { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; }
+  ul.what svg { flex: none; width: 18px; height: 18px; margin-top: 2px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  footer.site { margin-top: 34px; font-size: 12px; color: var(--muted); }
+  footer.site a { color: var(--muted); }
   /* full-screen share page */
   .qrbox { margin: 28px auto 0; width: min(78vw, 320px); }
   .qrbox svg.qr { display: block; width: 100%; height: auto; background: #fff; border-radius: 12px; }
@@ -62,13 +73,37 @@ const COPY = {
     tag: "Scan it. Know it. Let it go.",
     lead: "Know what's due. Find it after it's gone.",
     who: "Invite only", share: "Share",
+    what: [
+      "Photograph mail, bills, receipts and school letters with your phone.",
+      "Paper Archive reads each one and tells you what it is, what to do and by when.",
+      "Receipts are itemised into a monthly spending record.",
+      "The photo and a searchable record are kept, and you are told whether the paper can go.",
+    ],
+    privacy: "Privacy policy", contact: "Contact", operator: "Operated by SolidStart, Jōetsu, Japan",
   },
   ja: {
     tag: "撮る。わかる。手放せる。",
     lead: "いつ何をするかわかる。捨てても探せる。",
     who: "招待制", share: "共有",
+    what: [
+      "郵便物、請求書、レシート、学校のお知らせをスマホで撮ります。",
+      "アプリが内容を読み取り、何の書類か、いつまでに何をすればよいかを伝えます。",
+      "レシートは明細ごとに記録され、月ごとの支出がわかります。",
+      "写真と検索できる記録を保存し、紙の原本を手放せるかどうかの目安も伝えます。",
+    ],
+    privacy: "プライバシーポリシー", contact: "お問い合わせ", operator: "運営：SolidStart（新潟県上越市）",
   },
 };
+
+const WHAT_ICONS = [
+  `<svg viewBox="0 0 24 24"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"/><circle cx="12" cy="13" r="3"/></svg>`,
+  `<svg viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>`,
+  `<svg viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg>`,
+  `<svg viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`,
+];
+
+const siteFooter = (c: (typeof COPY)["en"]) =>
+  `<footer class="site">${c.operator} · <a href="/privacy">${c.privacy}</a> · <a href="mailto:privacy@solidstart.jp">${c.contact}</a></footer>`;
 
 const SHARE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>`;
 
@@ -84,11 +119,14 @@ export function signInPage(next: string, lang: ButtonLang): Response {
        <p class="lead">${c.lead}</p>
        <div class="cta">${googleSignInButton(lang, href)}</div>
        <p class="who">Paper Archive · ${c.who}</p>
+       <ul class="what">${c.what.map((w, i) => `<li>${WHAT_ICONS[i]}<span>${w}</span></li>`).join("")}</ul>
        <p><a class="pill" href="/share?lang=${lang}">${SHARE_ICON}${c.share}</a></p>
-       <p class="toggle"><a href="?lang=${other}&next=${nextQ}">${lang === "en" ? "日本語" : "English"}</a></p>`,
+       <p class="toggle"><a href="?lang=${other}&next=${nextQ}">${lang === "en" ? "日本語" : "English"}</a></p>
+       ${siteFooter(c)}`,
       lang,
     ),
-    { status: 401, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", Vary: "Accept-Language" } },
+    // 200, not 401: this is the public homepage as well as the sign-in page.
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", Vary: "Accept-Language" } },
   );
 }
 
