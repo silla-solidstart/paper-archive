@@ -5,7 +5,7 @@ self-test, then applies pending database migrations, then `wrangler deploy` to
 Cloudflare Workers on `pa.solidstart.jp`, then curls `/health`. Merging to `main` is the
 human step; nothing deploys on its own.
 
-Until the GitHub repo exists, the laptop path works the same way by hand (bottom).
+First deployed this way on 2026-09-20. The laptop path (bottom) is for emergencies.
 
 ## Three kinds of secrets, three places
 

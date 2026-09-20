@@ -221,9 +221,10 @@ mk GOOGLE_OAUTH_CLIENT_SECRET '…'
 
 `npm run dashboard` → http://localhost:8799. Reads the ledger from Neon via Secret Manager.
 
-### 4. Deploy
+### 4. Deploy — DONE 2026-09-20
 
-Laptop for now: `scripts/sync-secrets.sh && npx wrangler deploy` (after `npx wrangler login`
+First deploy landed via GitHub Actions (keyless auth → migrations → wrangler → health).
+https://pa.solidstart.jp is live; every push to `main` redeploys. Laptop path for emergencies: `scripts/sync-secrets.sh && npx wrangler deploy` (after `npx wrangler login`
 once). Then https://pa.solidstart.jp/health, sign in there, and the **phone test** — camera,
 HEIC→JPEG via canvas, Add to Home Screen.
 
