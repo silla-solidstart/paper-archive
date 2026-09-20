@@ -76,12 +76,16 @@ export const PAYMENT_METHODS = ["cash", "card", "transfer", "direct_debit", "e_m
  */
 export const EXTRACTION_VERSION = 2;
 
+// The nested expense lists are plain strings, not enums: every enum inside an
+// array multiplies the constrained-decoding grammar, and with ~18 categories
+// per line item the API refuses the request ("compiled grammar is too
+// large"). normaliseExpense() snaps unknown values to "other" instead.
 export const ExpenseItemSchema = z.object({
   name: z.string().describe("Line item as printed, original language"),
   quantity: z.number().nullable(),
   unit_price: z.number().nullable(),
   amount: z.number().nullable().describe("Line total as printed"),
-  category: z.enum(ITEM_CATEGORIES),
+  category: z.string().describe(`One of: ${ITEM_CATEGORIES.join(", ")}`),
 });
 export const ExpenseSchema = z.object({
   merchant: z.string().nullable().describe("Payee as printed"),
@@ -90,19 +94,27 @@ export const ExpenseSchema = z.object({
   total: z.number().nullable().describe("Grand total actually paid or payable"),
   tax: z.number().nullable().describe("Consumption tax / VAT included in total, if printed"),
   currency: z.string().describe("ISO 4217, JPY unless printed otherwise"),
-  payment_method: z.enum(PAYMENT_METHODS).nullable(),
-  expense_kind: z.enum(EXPENSE_KINDS).describe("Kind of the expense as a whole"),
+  payment_method: z.string().nullable().describe(`One of: ${PAYMENT_METHODS.join(", ")}; null if not printed`),
+  expense_kind: z.string().describe(`Kind of the expense as a whole. One of: ${EXPENSE_KINDS.join(", ")}`),
   items: z
     .array(ExpenseItemSchema)
     .describe("Line items, best effort, in printed order. Empty when the document has a single amount. Skip subtotal/tax/total lines."),
 });
+// Rows are pipe-joined strings, not string[][]: a second level of arrays next
+// to the expense items is what tips the grammar over the API's size limit.
+// Split back into cells after parse (see splitTables).
 export const TableSchema = z.object({
   title: z.string().nullable().describe("Caption or nearby heading, as printed"),
-  columns: z.array(z.string()).describe("Header cells as printed"),
-  rows: z.array(z.array(z.string())).describe("Body cells as printed, one array per row, same length as columns"),
+  header: z.string().describe("Header cells as printed, separated by ' | '"),
+  rows: z.array(z.string()).describe("One string per body row, cells as printed separated by ' | ', same count as the header"),
 });
+export interface Table { title: string | null; columns: string[]; rows: string[][] }
+const cells = (line: string) => line.split(" | ").map((c) => c.trim());
+export function splitTables(raw: Array<z.infer<typeof TableSchema>>): Table[] {
+  return raw.slice(0, 4).map((t) => ({ title: t.title, columns: cells(t.header), rows: t.rows.slice(0, 40).map(cells) }));
+}
 
-export const ExtractionSchema = z.object({
+export const CoreSchema = z.object({
   title: z.string().describe("Document title as printed, in its original language"),
   document_type: z.enum(DOCUMENT_TYPES).describe("Closest type; use other if none fits"),
   issuer: z.string().nullable().describe("Issuing organisation as printed"),
@@ -143,20 +155,51 @@ export const ExtractionSchema = z.object({
     .string()
     .nullable()
     .describe("Short stable name of the issuer in its own language, without legal suffixes or department names: 東京電力, 上越市, ヨドバシカメラ, Tokyo Gas"),
+  // No maxItems here: bounded arrays unroll in the constrained-decoding
+  // grammar and push the request over the API's size limit. Truncated after parse.
   keywords: z
     .array(z.string())
-    .max(10)
     .describe("Up to 10 terms someone might search for, in BOTH Japanese and English where sensible (固定資産税, property tax, 上越市, Joetsu). No sentences."),
-  tables: z
-    .array(TableSchema)
-    .max(4)
-    .describe("Tabular content worth keeping as data (usage history, statements, schedules). Best effort; at most 4 tables, at most 40 rows each. Empty when there is none."),
-  expense: ExpenseSchema.nullable().describe("Present when handling includes expense; null otherwise"),
+  has_tables: z.boolean().describe("True when the document contains tabular content worth keeping as data (usage history, statements, schedules)"),
 });
 
-export type Extraction = z.infer<typeof ExtractionSchema>;
+/**
+ * The second call. Expense lines and tables cannot share one structured
+ * output with the core schema: together they exceed the API's grammar size
+ * limit ("compiled grammar is too large"), and nesting them any further
+ * makes it worse. So the core call decides whether they exist, and this call
+ * runs only for expense documents and documents with tables.
+ */
+export const DetailSchema = z.object({
+  tables: z
+    .array(TableSchema)
+    .describe("Tabular content worth keeping as data. Best effort; at most 4 tables, at most 40 rows each. Empty when there is none."),
+  expense: ExpenseSchema.nullable().describe("Present when the document is an expense (receipt, bill, invoice, tax payment); null otherwise"),
+});
+
+/** The combined shape, as the rest of the app sees it. */
+export const ExtractionSchema = CoreSchema.omit({ has_tables: true }).extend(DetailSchema.shape);
+
+export type Extraction = Omit<z.infer<typeof ExtractionSchema>, "tables"> & { tables: Table[] };
 export type Expense = z.infer<typeof ExpenseSchema>;
 export type ExpenseItem = z.infer<typeof ExpenseItemSchema>;
+
+const snap = <T extends readonly string[]>(list: T, v: string | null | undefined, fallback: T[number] | null): T[number] | null => {
+  const k = (v ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return (list as readonly string[]).includes(k) ? (k as T[number]) : fallback;
+};
+
+/** Snaps the free-text expense codes onto the fixed lists (unknown → other / null). */
+export function normaliseExpense(e: Expense | null): Expense | null {
+  if (!e) return null;
+  return {
+    ...e,
+    expense_kind: snap(EXPENSE_KINDS, e.expense_kind, "other")!,
+    payment_method: snap(PAYMENT_METHODS, e.payment_method, null),
+    currency: (e.currency || "JPY").toUpperCase().slice(0, 3),
+    items: e.items.map((it) => ({ ...it, category: snap(ITEM_CATEGORIES, it.category, "other")! })),
+  };
+}
 
 export type Lang = "en" | "ja";
 
@@ -219,6 +262,19 @@ Tables: reproduce cells as printed; do not compute or normalise values.
 If the user says who the document is from, trust that for issuer_key and use it
 to resolve an ambiguous or partially legible issuer, but keep issuer as printed.`;
 
+const DETAIL_SYSTEM = `You read scanned personal paperwork and return its structured content.
+The OCR text is canonical for characters; the image is canonical for layout.
+Expense: fill it in when money left, or will leave, the household or business
+(receipts, paid or payable invoices, utility and phone bills, tax payments,
+tuition, subscriptions). Itemise receipts line by line where legible, in
+printed order; skip subtotal, tax and total lines. Keep item names exactly as
+printed, abbreviations included. A missing line total is null, never invented.
+Item categories: snacks = confectionery, chips, sweets; groceries = food and
+drink ingredients; beverages = non-alcoholic drinks bought as drinks; alcohol
+as such; household = consumables, cleaning, toiletries.
+Tables: reproduce cells as printed, ' | ' between cells; do not compute or
+normalise values. Empty when there is none. Dates ISO, 和暦 converted.`;
+
 const USER_LANGUAGE: Record<Lang, string> = {
   en: "The user's language is English. Write summary and retention_reason in English.",
   ja: "ユーザーの言語は日本語です。summary と retention_reason は自然な日本語で書いてください。",
@@ -253,33 +309,42 @@ export async function extract(
       `Extract the metadata.`,
   });
 
-  const response = await client.messages.parse({
-    model: EXTRACTION_MODEL,
-    max_tokens: 16000,
-    // The stable rules first, the per-request language last, so the long
-    // prefix stays cacheable across users.
-    system: `${SYSTEM}\n\n${USER_LANGUAGE[lang]}`,
-    messages: [{ role: "user", content }],
-    output_config: { format: zodOutputFormat(ExtractionSchema) },
-  });
+  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  const call = async <T extends z.ZodTypeAny>(system: string, schema: T, what: string): Promise<z.infer<T>> => {
+    const response = await client.messages.parse({
+      model: EXTRACTION_MODEL,
+      max_tokens: 16000,
+      system,
+      messages: [{ role: "user", content }],
+      output_config: { format: zodOutputFormat(schema) },
+    });
+    if (response.stop_reason === "refusal") {
+      throw new Error(`${what} refused: ${response.stop_details?.category ?? "unknown"}`);
+    }
+    if (!response.parsed_output) throw new Error(`${what} returned no parsed output`);
+    const u = response.usage;
+    usage.inputTokens += u.input_tokens;
+    usage.outputTokens += u.output_tokens;
+    usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
+    usage.cacheWriteTokens += u.cache_creation_input_tokens ?? 0;
+    return response.parsed_output as z.infer<T>;
+  };
 
-  if (response.stop_reason === "refusal") {
-    throw new Error(
-      `Extraction refused: ${response.stop_details?.category ?? "unknown"}`,
-    );
+  // The stable rules first, the per-request language last, so the long
+  // prefix stays cacheable across users.
+  const { has_tables, ...core } = await call(`${SYSTEM}\n\n${USER_LANGUAGE[lang]}`, CoreSchema, "Extraction");
+  let detail: z.infer<typeof DetailSchema> = { tables: [], expense: null };
+  if (core.handling.includes("expense") || has_tables) {
+    detail = await call(DETAIL_SYSTEM, DetailSchema, "Detail extraction");
   }
-  if (!response.parsed_output) {
-    throw new Error("Extraction returned no parsed output");
-  }
-  const u = response.usage;
   return {
-    extraction: response.parsed_output,
-    usage: {
-      inputTokens: u.input_tokens,
-      outputTokens: u.output_tokens,
-      cacheReadTokens: u.cache_read_input_tokens ?? 0,
-      cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+    extraction: {
+      ...core,
+      keywords: core.keywords.slice(0, 10),
+      tables: splitTables(detail.tables),
+      expense: core.handling.includes("expense") ? normaliseExpense(detail.expense) : null,
     },
+    usage,
     model: EXTRACTION_MODEL,
   };
 }

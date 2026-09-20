@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 
 import { buildFilename } from "../src/filing.ts";
 import { escapeLike } from "../src/db.ts";
-import { ExtractionSchema, ExpenseSchema, EXTRACTION_VERSION, HANDLING, ITEM_CATEGORIES, RETENTION_STATUSES, DOCUMENT_TYPES } from "../src/extract.ts";
+import { ExtractionSchema, ExpenseSchema, EXTRACTION_VERSION, normaliseExpense, splitTables, HANDLING, ITEM_CATEGORIES, RETENTION_STATUSES, DOCUMENT_TYPES } from "../src/extract.ts";
 import { base64url, pemToPkcs8 } from "../src/google-auth.ts";
 import { sign, verify, encrypt, decrypt, readSession, createSessionCookie } from "../src/session.ts";
 import { isRetryable, UpstreamError, withRetry } from "../src/retry.ts";
@@ -40,7 +40,7 @@ const sample = {
   handling: ["todo", "expense", "record"],
   issuer_key: "上越市",
   keywords: ["固定資産税", "property tax", "上越市", "Joetsu"],
-  tables: [{ title: "納期", columns: ["期", "納期限", "金額"], rows: [["第1期", "令和8年6月30日", "32,100"], ["第2期", "令和8年9月30日", "32,100"]] }],
+  tables: [{ title: "納期", header: "期 | 納期限 | 金額", rows: ["第1期 | 令和8年6月30日 | 32,100", "第2期 | 令和8年9月30日 | 32,100"] }],
   expense: {
     merchant: "上越市", merchant_key: "上越市", spent_on: "2026-09-30", total: 128400, tax: null, currency: "JPY",
     payment_method: null, expense_kind: "tax", items: [],
@@ -61,9 +61,14 @@ test("extraction v2: handling, keywords and an itemised expense parse; unknown c
   assert.equal(EXTRACTION_VERSION, 2);
   assert.ok(ExtractionSchema.safeParse({ ...sample, expense: receipt, handling: ["expense"] }).success);
   assert.ok(ExpenseSchema.safeParse(receipt).success);
-  assert.equal(ExpenseSchema.safeParse({ ...receipt, items: [{ ...receipt.items[0], category: "junk food" }] }).success, false);
+  // Expense codes are free text in the schema (grammar size) and snapped afterwards.
+  const n = normaliseExpense({ ...receipt, expense_kind: "Groceries ", payment_method: "credit", items: [{ ...receipt.items[0], category: "junk food" }, receipt.items[1]] })!;
+  assert.equal(n.expense_kind, "groceries");
+  assert.equal(n.payment_method, null);
+  assert.deepEqual(n.items.map((i) => i.category), ["other", "groceries"]);
+  assert.equal(normaliseExpense(null), null);
+  assert.deepEqual(splitTables(sample.tables)[0], { title: "納期", columns: ["期", "納期限", "金額"], rows: [["第1期", "令和8年6月30日", "32,100"], ["第2期", "令和8年9月30日", "32,100"]] });
   assert.equal(ExtractionSchema.safeParse({ ...sample, handling: ["urgent"] }).success, false);
-  assert.equal(ExtractionSchema.safeParse({ ...sample, keywords: new Array(11).fill("x") }).success, false);
   assert.ok((HANDLING as readonly string[]).includes("noise"));
   assert.ok((ITEM_CATEGORIES as readonly string[]).includes("snacks"));
   // A non-expense document carries no expense block.
