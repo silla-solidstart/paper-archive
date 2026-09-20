@@ -33,22 +33,24 @@ const STYLE = GOOGLE_BUTTON_CSS + `
   .toggle { font-size: 13px; margin-top: 26px; } .toggle a { color: var(--muted); text-decoration: none; } .toggle b { color: var(--fg); font-weight: 500; }
   h1.tag { font-size: 26px; line-height: 1.25; margin: 18px 0 8px; letter-spacing: -0.01em; }
   p.lead { color: var(--fg); opacity: .8; max-width: 380px; margin: 0 auto; }
-  details.share { margin-top: 26px; }
-  details.share > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted);
-                            padding: 8px 14px; border: 1px solid rgba(128,128,128,.35); border-radius: 999px; }
-  details.share > summary::-webkit-details-marker { display: none; }
-  details.share[open] > summary { color: var(--fg); }
-  .qrbox { margin: 14px auto 0; width: 220px; }
-  .qrbox svg.qr { display: block; width: 100%; height: auto; background: #fff; border-radius: 10px; }
-  .qrbox .url { font-size: 13px; color: var(--muted); margin-top: 8px; word-break: break-all; }
+  a.pill { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 14px; color: var(--muted); text-decoration: none;
+           padding: 8px 14px; border: 1px solid rgba(128,128,128,.35); border-radius: 999px; }
+  a.pill:hover { color: var(--fg); }
+  /* full-screen share page */
+  .qrbox { margin: 22px auto 0; width: min(78vw, 300px); }
+  .qrbox svg.qr { display: block; width: 100%; height: auto; background: #fff; border-radius: 12px; }
+  .url { font-size: 15px; color: var(--fg); margin-top: 12px; word-break: break-all; }
+  .hint { font-size: 14px; color: var(--muted); margin-top: 4px; }
+  body.share { cursor: pointer; }
+  @media print { body { background: #fff; color: #000; } .qrbox { width: 70vw; max-width: 520px; } a.pill, .toggle, .noprint { display: none !important; } }
 `;
 
-const page = (title: string, body: string, lang: ButtonLang = "en") =>
+const page = (title: string, body: string, lang: ButtonLang = "en", bodyClass = "") =>
   `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${title}</title><link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Roboto:wght@500&display=swap" rel="stylesheet">
 <style>${STYLE}</style></head>
-<body><main>${MARK}${body}</main></body></html>`;
+<body class="${bodyClass}"><main>${MARK}${body}</main></body></html>`;
 
 const COPY = {
   en: {
@@ -77,9 +79,7 @@ export function signInPage(next: string, lang: ButtonLang): Response {
        <p class="lead">${c.lead}</p>
        <div class="cta">${googleSignInButton(lang, href)}</div>
        <p class="who">Paper Archive · ${c.who}</p>
-       <details class="share"><summary>${SHARE_ICON}${c.share}</summary>
-         <div class="qrbox">${SITE_QR_SVG}<div class="url">${c.share_hint}<br>${SITE_URL}</div></div>
-       </details>
+       <p><a class="pill" href="/share?lang=${lang}">${SHARE_ICON}${c.share}</a></p>
        <p class="toggle"><a href="?lang=${other}&next=${nextQ}">${lang === "en" ? "日本語" : "English"}</a></p>`,
       lang,
     ),
@@ -103,5 +103,36 @@ export function notInvitedPage(email: string, lang: ButtonLang = "en"): Response
       lang,
     ),
     { status: 403, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
+  );
+}
+
+export function sharePage(lang: ButtonLang): Response {
+  const c = COPY[lang];
+  const other = lang === "en" ? "ja" : "en";
+  const back = lang === "en" ? "Back" : "戻る";
+  const print = lang === "en" ? "Print" : "印刷";
+  return new Response(
+    page(
+      lang === "ja" ? "ペーパーアーカイブを共有" : "Share Paper Archive",
+      `<h1 class="tag">${c.tag}</h1>
+       <p class="lead">${c.share_hint}</p>
+       <div class="qrbox">${SITE_QR_SVG}</div>
+       <div class="url">${SITE_URL}</div>
+       <p class="hint">Paper Archive · ${c.who}</p>
+       <p class="noprint"><a class="pill" href="/?lang=${lang}">${back}</a> <a class="pill" href="#" data-print>${print}</a></p>
+       <p class="toggle noprint"><a href="/share?lang=${other}">${lang === "en" ? "日本語" : "English"}</a></p>
+       <script>
+         // Tap anywhere that is not a link to go back; Escape too.
+         document.body.addEventListener("click", (e) => {
+           const a = e.target.closest("a");
+           if (a && a.hasAttribute("data-print")) { e.preventDefault(); window.print(); return; }
+           if (!a) location.href = "/?lang=${lang}";
+         });
+         document.addEventListener("keydown", (e) => { if (e.key === "Escape") location.href = "/?lang=${lang}"; });
+       </script>`,
+      lang,
+      "share",
+    ),
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300", Vary: "Accept-Language" } },
   );
 }

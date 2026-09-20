@@ -25,7 +25,7 @@ import { estimateCost, PRICING_AS_OF } from "./pricing.ts";
 import { callback, login, logout, ReconnectRequired } from "./oauth.ts";
 import { readSession } from "./session.ts";
 import { accessFor, addAllowed, listAllowed, normaliseEntry, removeAllowed } from "./allow.ts";
-import { signInPage } from "./gate.ts";
+import { sharePage, signInPage } from "./gate.ts";
 import { fileToDrive, type Filed } from "./filing.ts";
 import {
   acceptInvite, cleanName, createInvite, createSpace, getInvite, getSpaceForUser, listInvites, listMembers,
@@ -136,6 +136,10 @@ export default {
     // Unauthenticated: liveness only. Nothing about configuration leaks here.
     if (path === "/health") return json({ ok: true });
 
+    if (path === "/share") {
+      const q = url.searchParams.get("lang");
+      return sharePage(q === "ja" || q === "en" ? q : requestLang(request));
+    }
     if (path === "/auth/login") return login(env, url.searchParams.get("next") ?? "/");
     if (path === "/auth/callback") return callback(request, env);
     if (path === "/auth/logout") return logout();
