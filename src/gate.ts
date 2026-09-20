@@ -37,7 +37,7 @@ const STYLE = GOOGLE_BUTTON_CSS + `
            padding: 8px 14px; border: 1px solid rgba(128,128,128,.35); border-radius: 999px; }
   a.pill:hover { color: var(--fg); }
   /* full-screen share page */
-  .qrbox { margin: 22px auto 0; width: min(78vw, 300px); }
+  .qrbox { margin: 28px auto 0; width: min(78vw, 320px); }
   .qrbox svg.qr { display: block; width: 100%; height: auto; background: #fff; border-radius: 12px; }
   .url { font-size: 15px; color: var(--fg); margin-top: 12px; word-break: break-all; }
   .hint { font-size: 14px; color: var(--muted); margin-top: 4px; }
@@ -107,27 +107,15 @@ export function notInvitedPage(email: string, lang: ButtonLang = "en"): Response
 }
 
 export function sharePage(lang: ButtonLang): Response {
-  const c = COPY[lang];
-  const other = lang === "en" ? "ja" : "en";
   const back = lang === "en" ? "Back" : "戻る";
-  const print = lang === "en" ? "Print" : "印刷";
   return new Response(
     page(
       lang === "ja" ? "ペーパーアーカイブを共有" : "Share Paper Archive",
-      `<h1 class="tag">${c.tag}</h1>
-       <p class="lead">${c.share_hint}</p>
-       <div class="qrbox">${SITE_QR_SVG}</div>
-       <div class="url">${SITE_URL}</div>
-       <p class="hint">Paper Archive · ${c.who}</p>
-       <p class="noprint"><a class="pill" href="/?lang=${lang}">${back}</a> <a class="pill" href="#" data-print>${print}</a></p>
-       <p class="toggle noprint"><a href="/share?lang=${other}">${lang === "en" ? "日本語" : "English"}</a></p>
+      `<div class="qrbox">${SITE_QR_SVG}</div>
+       <p class="noprint"><a class="pill" href="/?lang=${lang}">${back}</a></p>
        <script>
-         // Tap anywhere that is not a link to go back; Escape too.
-         document.body.addEventListener("click", (e) => {
-           const a = e.target.closest("a");
-           if (a && a.hasAttribute("data-print")) { e.preventDefault(); window.print(); return; }
-           if (!a) location.href = "/?lang=${lang}";
-         });
+         // Tap anywhere that is not the button to go back; Escape too.
+         document.body.addEventListener("click", (e) => { if (!e.target.closest("a")) location.href = "/?lang=${lang}"; });
          document.addEventListener("keydown", (e) => { if (e.key === "Escape") location.href = "/?lang=${lang}"; });
        </script>`,
       lang,

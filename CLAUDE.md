@@ -93,6 +93,15 @@ Invites are capability links (`/join/<token>`, 7 days, up to 10 uses, revocable
 by the owner). Accepting requires Google sign-in. The preview endpoint is
 public by design: the join page shows what you are joining before sign-in.
 
+## Japanese copy: editor pass required
+
+No user-facing Japanese copy ships on a first draft. Run it through a dedicated
+editor pass (a fresh reviewer briefed as a senior Japanese copy editor; Japanese
+first, English as a counterpart, not a translation) and take its recommendation.
+Supporting lines ≈ 20 characters (≤ 25); English ≤ 8 words. No abstractions that
+beg a question (「忘れる」), no personification, no pipeline arrows as copy.
+Adopted copy is recorded in `docs/brand.md`.
+
 ## Languages
 
 The UI is EN / 日本語 (toggle in the header, auto-detected from the browser,
