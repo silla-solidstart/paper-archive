@@ -78,10 +78,10 @@ because wrapping them would need a decoder; the PWA only ever sends JPEG or PDF.
 Verified against the real service: Document AI OCR (Japanese, via user
 credentials). Verified locally: the service-account JWT path (throwaway key),
 every route's auth/size/type handling and the PWA assets (wrangler dev smoke
-tests), and the pure logic (`npm test`). **Never executed:** the Claude
-extraction call, the Neon queries and migration runner, the OAuth exchange,
-the Drive upload, and the service-account path against real Google (blocked
-on the org-policy exception in docs/setup.md). Treat those as first-run risks.
+tests), and the pure logic (`npm test`). Verified 2026-09-20 through the Worker with the real key: the service-account
+JWT → token → Document AI path. **Never executed:** the Claude extraction
+call, the Neon queries and migration runner, the OAuth exchange, and the
+Drive upload. Treat those as first-run risks.
 
 ## Secrets
 

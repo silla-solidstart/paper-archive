@@ -148,11 +148,16 @@ survives the session. Already created there: `APP_BEARER_TOKEN`, `SESSION_SECRET
 Run the commands below **in your own terminal, not via `!`**, so the values never enter
 the Claude session transcript.
 
-### 1. The service-account key (blocked by org policy + a permission I can't grant myself)
+### 1. The service-account key — DONE 2026-09-20
 
-Your org enforces `iam.managed.disableServiceAccountKeyCreation`. You chose a
-project-scoped exception. Setting it needs `orgpolicy.policyAdmin`, which your account
-lacks and which the agent was (correctly) refused permission to grant. Sequence:
+Your org enforces `iam.managed.disableServiceAccountKeyCreation`. A project-scoped
+exception (`enforce: false` on `solidstart-paper-archive` only) is in place; the
+temporary `orgpolicy.policyAdmin` grant used to set it has been revoked. Key
+`709637ad…` lives only in Secret Manager as `GCP_SA_KEY_JSON`. **Rotate by 2026-12-19.**
+Verified the same day: `scripts/dev.sh` → JWT → Google token → Document AI OCR of the
+brief PDF, through the Worker.
+
+The sequence that was used, kept for the rotation and for the record:
 
 ```bash
 ORG=7833859326; P=solidstart-paper-archive; PN=318291773922; ME=user:silla@solidstart.jp
@@ -171,7 +176,7 @@ gcloud organizations remove-iam-policy-binding $ORG --member=$ME --role=roles/or
 Rotate this key every 90 days (`keys create` → new secret version → `scripts/sync-secrets.sh`
 → delete the old key). Keys never expire on their own; that is why the policy exists.
 
-### 2. The other secrets
+### 2. The other secrets — still needed
 
 ```bash
 P=solidstart-paper-archive; mk() { printf '%s' "$2" | gcloud secrets create "$1" --project=$P --replication-policy=automatic --data-file=-; }
