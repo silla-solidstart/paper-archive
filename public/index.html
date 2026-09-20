@@ -17,15 +17,16 @@
 <header class="top">
   <div class="brand">Paper Archive</div>
   <div class="who" id="who"></div>
+  <button class="small" id="lang" aria-label="Language">日本語</button>
 </header>
 
 <main id="view" aria-live="polite"></main>
 
 <nav class="tabs" id="tabs">
-  <a href="#/" data-tab="scan"><span class="glyph">📷</span>Scan</a>
-  <a href="#/recent" data-tab="recent"><span class="glyph">🗂</span>Recent</a>
-  <a href="#/actions" data-tab="actions"><span class="glyph">⚠️</span>Actions</a>
-  <a href="#/search" data-tab="search"><span class="glyph">🔍</span>Search</a>
+  <a href="#/" data-tab="scan"><span class="glyph">📷</span><span>Scan</span></a>
+  <a href="#/recent" data-tab="recent"><span class="glyph">🗂</span><span>Recent</span></a>
+  <a href="#/actions" data-tab="actions"><span class="glyph">⚠️</span><span>Actions</span></a>
+  <a href="#/search" data-tab="search"><span class="glyph">🔍</span><span>Search</span></a>
 </nav>
 
 <input id="file" type="file" accept="image/*,application/pdf" capture="environment" hidden>

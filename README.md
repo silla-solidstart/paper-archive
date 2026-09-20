@@ -42,6 +42,9 @@ Other routes, session cookie or bearer: `GET /api/me`, `GET /api/documents/:id`,
 The PWA (`public/`, no build step) has Scan / Recent / Actions / Search tabs and a document
 view; it is installable (manifest + service worker; the shell is cached, the API never is).
 
+Unit economics: `GET /api/costs` (bearer token) — attempts, totals, average and p50/p95 cost
+per scan, by month and by model, from the `scan_costs` ledger. Model in `docs/costs.md`.
+
 Prompt tuning: `node scripts/eval-extract.ts <folder-of-scans>` runs the corpus through a
 running dev server and tabulates the extraction per document (billable per document).
 

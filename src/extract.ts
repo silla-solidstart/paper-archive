@@ -87,6 +87,16 @@ export const ExtractionSchema = z.object({
 
 export type Extraction = z.infer<typeof ExtractionSchema>;
 
+export type Lang = "en" | "ja";
+
+export interface ExtractResult {
+  extraction: Extraction;
+  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
+  model: string;
+}
+
+export const EXTRACTION_MODEL = "claude-opus-5";
+
 const SYSTEM = `You read scanned personal paperwork and return structured metadata.
 
 Most documents are Japanese: municipal notices, utility bills, tax documents,
@@ -98,8 +108,11 @@ Rules:
 - Convert 和暦 era dates to Gregorian ISO dates. 令和N年 = 2018+N.
   令和8年9月30日 is 2026-09-30. Never guess a year you cannot derive.
 - Use null rather than inventing a value. A missing field is a correct answer.
-- Write summaries in English regardless of document language. Keep titles and
-  issuer names in the original language exactly as printed.
+- Keep title and issuer in the original language exactly as printed.
+- Write summary and retention_reason in the USER'S language, given below. They
+  are shown to the user; plain, one sentence each.
+- action_type and document_type are machine values from the fixed lists; do
+  not translate them.
 
 Retention — be conservative. This decides whether someone throws away an original:
 - keep_original: has legal, tax, or ownership significance, or is required in
@@ -118,11 +131,17 @@ document is clearly personal and small; otherwise unsure.
 Never answer digital_sufficient to be helpful. "unsure" is the correct answer
 when you are unsure, and the product surfaces it for human review.`;
 
+const USER_LANGUAGE: Record<Lang, string> = {
+  en: "The user's language is English. Write summary and retention_reason in English.",
+  ja: "ユーザーの言語は日本語です。summary と retention_reason は自然な日本語で書いてください。",
+};
+
 export async function extract(
   env: Env,
   ocrText: string,
   image: { data: string; mediaType: string } | null,
-): Promise<Extraction> {
+  lang: Lang = "en",
+): Promise<ExtractResult> {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
   const content: Anthropic.ContentBlockParam[] = [];
@@ -142,9 +161,11 @@ export async function extract(
   });
 
   const response = await client.messages.parse({
-    model: "claude-opus-5",
+    model: EXTRACTION_MODEL,
     max_tokens: 16000,
-    system: SYSTEM,
+    // The stable rules first, the per-request language last, so the long
+    // prefix stays cacheable across users.
+    system: `${SYSTEM}\n\n${USER_LANGUAGE[lang]}`,
     messages: [{ role: "user", content }],
     output_config: { format: zodOutputFormat(ExtractionSchema) },
   });
@@ -157,5 +178,15 @@ export async function extract(
   if (!response.parsed_output) {
     throw new Error("Extraction returned no parsed output");
   }
-  return response.parsed_output;
+  const u = response.usage;
+  return {
+    extraction: response.parsed_output,
+    usage: {
+      inputTokens: u.input_tokens,
+      outputTokens: u.output_tokens,
+      cacheReadTokens: u.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+    },
+    model: EXTRACTION_MODEL,
+  };
 }

@@ -10,15 +10,18 @@ import {
   getUserById,
   hasDatabase,
   insertDocument,
+  costSummary,
   listActions,
   listRecent,
   pingDatabase,
+  recordScanCost,
   searchDocuments,
   updateDocumentFiling,
   updateDocumentRetention,
   type UserRow,
 } from "./db.ts";
-import { RETENTION_STATUSES, type RetentionStatus } from "./extract.ts";
+import { RETENTION_STATUSES, type Lang, type RetentionStatus } from "./extract.ts";
+import { estimateCost, PRICING_AS_OF } from "./pricing.ts";
 import { callback, login, logout, ReconnectRequired } from "./oauth.ts";
 import { readSession } from "./session.ts";
 import { fileToDrive, type Filed } from "./filing.ts";
@@ -43,6 +46,7 @@ import { userAccessToken } from "./oauth.ts";
  *   GET  /api/documents/:id
  *   DELETE /api/documents/:id            removes the index row; trashes the Drive file
  *   PATCH /api/documents/:id/retention   { retention, reason? } — the human's call
+ *   GET  /api/costs     unit economics from the scan_costs ledger (bearer = platform-wide)
  *   GET  /api/status    which credentials are configured
  *   *    /mcp           search_documents / get_document / list_actions /
  *                     set_retention_decision (bearer only)
@@ -50,7 +54,12 @@ import { userAccessToken } from "./oauth.ts";
  * Static PWA is served from public/ via Workers assets.
  */
 
-const EXTRACTION_MODEL = "claude-opus-5";
+/** Explicit X-Lang wins; otherwise the browser's Accept-Language; else English. */
+function requestLang(request: Request): Lang {
+  const explicit = request.headers.get("X-Lang");
+  if (explicit === "ja" || explicit === "en") return explicit;
+  return /^ja\b/i.test(request.headers.get("Accept-Language") ?? "") ? "ja" : "en";
+}
 
 // Document AI online processing accepts up to ~20 MB. Refuse before buffering.
 const MAX_BODY_BYTES = 20 * 1024 * 1024;
@@ -140,6 +149,12 @@ export default {
       return json({ documents: await listRecent(env, userId) });
     }
 
+    if (path === "/api/costs") {
+      if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
+      // A session user sees their own; the bearer token is the operator and sees everything.
+      return json({ pricing_as_of: PRICING_AS_OF, ...(await costSummary(env, caller.user?.id ?? null)) });
+    }
+
     if (path === "/api/actions") {
       if (!hasDatabase(env)) return json({ error: "database not configured" }, 503);
       const userId = caller.user?.id ?? (await ensureLocalUser(env));
@@ -221,13 +236,20 @@ export default {
 
       // Each stage can fail independently; report which one did.
       let stage: "ocr" | "extraction" | "index" | "filing" = "ocr";
+      const started = Date.now();
+      let ocrPages = 0;
+      const langForLedger = requestLang(request);
       try {
         const result = await ocr(env, bytes, mimeType);
+        ocrPages = result.pageCount;
 
         stage = "extraction";
         // PDFs are not sent as images — Document AI has already flattened them.
         const image = isImage ? { data: arrayBufferToBase64(bytes), mediaType: mimeType } : null;
-        const extraction = await extract(env, result.text, image);
+        const lang = requestLang(request);
+        const { extraction, usage, model } = await extract(env, result.text, image, lang);
+        const cost = estimateCost(model, { pages: result.pageCount, ...usage });
+        const meta = { lang, cost, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
 
         // Index it, if there is somewhere to index it. Without DATABASE_URL the
         // endpoint still works as a pure OCR+extract tester.
@@ -237,10 +259,11 @@ export default {
 
         if (hasDatabase(env)) {
           stage = "index";
+          const ledgerUser = caller.user?.id ?? (await ensureLocalUser(env));
           const filename = decodeURIComponent(request.headers.get("X-Filename") ?? "") || null;
 
           if (caller.user) {
-            id = await insertDocument(env, caller.user.id, filename, result, extraction, EXTRACTION_MODEL, "filing");
+            id = await insertDocument(env, caller.user.id, filename, result, extraction, model, "filing", meta);
             stage = "filing";
             try {
               filed = await fileToDrive(env, caller.user, bytes, mimeType, extraction);
@@ -263,13 +286,23 @@ export default {
               });
             }
           } else {
-            const userId = await ensureLocalUser(env);
-            id = await insertDocument(env, userId, filename, result, extraction, EXTRACTION_MODEL, "complete");
+            id = await insertDocument(env, ledgerUser, filename, result, extraction, model, "complete", meta);
           }
+
+          await recordScanCost(env, {
+            userId: ledgerUser, documentId: id, status: "complete", stage: null, lang,
+            mimeType, bytes: bytes.byteLength, ocrPages: result.pageCount, model,
+            inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
+            cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens,
+            ocrUsd: cost.ocr_usd, llmUsd: cost.llm_usd, totalUsd: cost.total_usd,
+            pricingAsOf: cost.pricing_as_of, durationMs: Date.now() - started,
+          });
         }
 
         return json({
           id,
+          lang,
+          cost,
           filed,
           filing_error: filingError,
           ocr: {
@@ -285,6 +318,21 @@ export default {
         // Upstream error bodies can carry project identifiers and quota
         // details. Log them; do not echo them.
         console.error(`[${rid}] process failed at ${stage}:`, err);
+        // A failure after OCR still cost money. Ledger it, best effort.
+        if (hasDatabase(env) && ocrPages > 0) {
+          try {
+            const c = estimateCost("claude-opus-5", { pages: ocrPages, inputTokens: 0, outputTokens: 0 });
+            await recordScanCost(env, {
+              userId: caller.user?.id ?? (await ensureLocalUser(env)), documentId: null,
+              status: "failed", stage, lang: langForLedger, mimeType, bytes: bytes.byteLength,
+              ocrPages, model: null, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
+              ocrUsd: c.ocr_usd, llmUsd: 0, totalUsd: c.ocr_usd, pricingAsOf: c.pricing_as_of,
+              durationMs: Date.now() - started,
+            });
+          } catch (ledgerErr) {
+            console.error(`[${rid}] ledger write failed:`, ledgerErr);
+          }
+        }
         return json({ error: "processing failed", stage, request_id: rid }, 502);
       }
     }

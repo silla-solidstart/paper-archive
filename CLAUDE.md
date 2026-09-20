@@ -65,6 +65,24 @@ but the Drive upload fails, the document is indexed with `status = failed` and
 the only recovery is a re-scan. The UI says so. When Workflows arrive, add R2
 as the staging store and this becomes a real retry.
 
+## Languages
+
+The UI is EN / 日本語 (toggle in the header, auto-detected from the browser,
+persisted per device). The same choice is sent as `X-Lang` and decides the
+language the model writes `summary` and `retention_reason` in; `title` and
+`issuer` are always as printed on the document; `document_type` and
+`action_type` are machine values and are localised in the UI only. The
+language is stored per document (`documents.lang`).
+
+## Costs
+
+Every scan attempt writes a row to `scan_costs` (migration 0003) — including
+attempts that fail after OCR, because OCR was still paid for — and the row
+survives document and user deletion. `GET /api/costs` summarises it (the
+bearer token sees platform-wide; a session user sees their own). Prices live
+in `src/pricing.ts`, dated; check them when `PRICING_AS_OF` is stale. See
+`docs/costs.md` for the pricing model.
+
 ## Filing format
 
 JPEG scans are filed as single-page PDFs with the JPEG embedded verbatim

@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import type { Env } from "./types.ts";
-import type { Extraction, RetentionStatus } from "./extract.ts";
+import type { Extraction, Lang, RetentionStatus } from "./extract.ts";
+import type { Cost } from "./pricing.ts";
 import type { OcrResult } from "./docai.ts";
 
 /**
@@ -30,6 +31,11 @@ export interface DocumentRow {
   retention_reason: string | null;
   extracted_data: Record<string, unknown>;
   extraction_model: string | null;
+  lang: string | null;
+  cost_usd: string | number | null;
+  ocr_pages: number | null;
+  llm_input_tokens: number | null;
+  llm_output_tokens: number | null;
   status: string;
   error: string | null;
   created_at: string;
@@ -159,6 +165,7 @@ export async function insertDocument(
   x: Extraction,
   model: string,
   status: "complete" | "filing" = "complete",
+  meta: { lang: Lang; cost: Cost; inputTokens: number; outputTokens: number } | null = null,
 ): Promise<string> {
   const q = sql(env);
 
@@ -179,14 +186,16 @@ export async function insertDocument(
        title, document_type, issuer, document_date, summary,
        action_required, action_type, action_date,
        retention, retention_reason,
-       extracted_data, extraction_model, status
+       extracted_data, extraction_model, status,
+       lang, cost_usd, ocr_pages, llm_input_tokens, llm_output_tokens
      ) VALUES (
        $1, $2,
        $3, $4, $5,
        $6, $7, $8, $9, $10,
        $11, $12, $13,
        $14, $15,
-       $16, $17, $18
+       $16, $17, $18,
+       $19, $20, $21, $22, $23
      ) RETURNING id`,
     [
       userId, filename,
@@ -195,13 +204,15 @@ export async function insertDocument(
       x.action_required, x.action_type, x.action_date,
       x.retention, x.retention_reason,
       JSON.stringify(extracted), model, status,
+      meta?.lang ?? null, meta?.cost.total_usd ?? null, ocr.pageCount,
+      meta?.inputTokens ?? null, meta?.outputTokens ?? null,
     ],
   );
   return (rows as Array<{ id: string }>)[0].id;
 }
 
 const LIST_COLUMNS = `id, title, document_type, issuer, document_date, summary,
-  action_required, action_type, action_date, retention, created_at`;
+  action_required, action_type, action_date, retention, lang, cost_usd, created_at`;
 
 export async function searchDocuments(
   env: Env,
@@ -263,6 +274,84 @@ export async function listActions(
     [userId, limit],
   );
   return rows as Partial<DocumentRow>[];
+}
+
+export interface ScanCostRow {
+  userId: string | null;
+  documentId: string | null;
+  status: "complete" | "failed";
+  stage: string | null;
+  lang: string | null;
+  mimeType: string;
+  bytes: number;
+  ocrPages: number;
+  model: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  ocrUsd: number;
+  llmUsd: number;
+  totalUsd: number;
+  pricingAsOf: string | null;
+  durationMs: number;
+}
+
+/** The ledger row. Written for every attempt; never deleted. */
+export async function recordScanCost(env: Env, r: ScanCostRow): Promise<void> {
+  await sql(env).query(
+    `INSERT INTO scan_costs (
+       user_id, document_id, status, stage, lang, mime_type, bytes,
+       ocr_pages, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+       ocr_usd, llm_usd, total_usd, pricing_as_of, duration_ms
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+    [
+      r.userId, r.documentId, r.status, r.stage, r.lang, r.mimeType, r.bytes,
+      r.ocrPages, r.model, r.inputTokens, r.outputTokens, r.cacheReadTokens, r.cacheWriteTokens,
+      r.ocrUsd, r.llmUsd, r.totalUsd, r.pricingAsOf, r.durationMs,
+    ],
+  );
+}
+
+/**
+ * Unit economics. userId null = platform-wide (operator view).
+ * Averages and percentiles are over completed scans; totals include failures,
+ * because failed attempts cost money too.
+ */
+export async function costSummary(env: Env, userId: string | null): Promise<Record<string, unknown>> {
+  const q = sql(env);
+  const where = userId ? "WHERE user_id = $1" : "";
+  const params = userId ? [userId] : [];
+  const [totals] = (await q.query(
+    `SELECT
+       count(*)::int                                                AS attempts,
+       count(*) FILTER (WHERE status = 'complete')::int             AS completed,
+       coalesce(sum(total_usd), 0)::float                           AS total_usd,
+       coalesce(sum(ocr_usd), 0)::float                             AS ocr_usd,
+       coalesce(sum(llm_usd), 0)::float                             AS llm_usd,
+       coalesce(avg(total_usd) FILTER (WHERE status = 'complete'), 0)::float AS avg_usd_per_scan,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY total_usd) FILTER (WHERE status = 'complete'), 0)::float AS p50_usd,
+       coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY total_usd) FILTER (WHERE status = 'complete'), 0)::float AS p95_usd,
+       coalesce(avg(input_tokens + output_tokens) FILTER (WHERE status = 'complete'), 0)::float AS avg_tokens,
+       coalesce(avg(ocr_pages) FILTER (WHERE status = 'complete'), 0)::float AS avg_pages,
+       coalesce(avg(duration_ms) FILTER (WHERE status = 'complete'), 0)::float AS avg_duration_ms,
+       min(created_at)                                              AS since,
+       count(DISTINCT user_id)::int                                 AS users
+     FROM scan_costs ${where}`,
+    params,
+  )) as Record<string, unknown>[];
+  const byMonth = (await q.query(
+    `SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month,
+            count(*)::int AS attempts, coalesce(sum(total_usd), 0)::float AS total_usd
+     FROM scan_costs ${where} GROUP BY 1 ORDER BY 1 DESC LIMIT 12`,
+    params,
+  )) as Record<string, unknown>[];
+  const byModel = (await q.query(
+    `SELECT model, count(*)::int AS scans, coalesce(avg(total_usd), 0)::float AS avg_usd
+     FROM scan_costs ${where ? where + " AND" : "WHERE"} status = 'complete' GROUP BY 1 ORDER BY 2 DESC`,
+    params,
+  )) as Record<string, unknown>[];
+  return { ...totals, by_month: byMonth, by_model: byModel };
 }
 
 export async function listRecent(
