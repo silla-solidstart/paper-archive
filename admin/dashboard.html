@@ -129,6 +129,8 @@ function wireTips(svg) {
 const BAR_MAX = 24, R = 4, GAP = 2;
 function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
 function ticks(max, n = 4) { const out = []; for (let i = 0; i <= n; i++) out.push((max / n) * i); return out; }
+// counts are whole numbers: never more tick steps than the max itself
+function countTicks(max) { return ticks(max, Math.max(1, Math.min(4, Math.round(max)))); }
 // rounded top, square base; height may be 0
 function topRoundedRect(x, y, w, h, r) {
   if (h <= 0) return ""; r = Math.min(r, w / 2, h);
@@ -141,7 +143,7 @@ function rightRoundedRect(x, y, w, h, r) {
 
 /** Stacked columns, two series (slot 1 + slot 2), 2px surface gap between segments. */
 function stackedColumns(rows, keys, labels, colors, tipFn) {
-  const W = 640, H = 220, padL = 44, padR = 8, padT = 10, padB = 28;
+  const W = 1000, H = 260, padL = 48, padR = 8, padT = 10, padB = 28;
   const iw = W - padL - padR, ih = H - padT - padB;
   const totals = rows.map((r) => keys.reduce((a, k) => a + (r[k] || 0), 0));
   const max = niceMax(Math.max(...totals, 0) * JPY);
@@ -173,14 +175,14 @@ function stackedColumns(rows, keys, labels, colors, tipFn) {
 
 /** Horizontal bars, one series (slot 1), value at the tip. */
 function hbars(rows, labelKey, valueKey, fmt, tipFn) {
-  const rowH = 30, W = 640, padL = 150, padR = 90, H = rows.length * rowH + 8;
+  const rowH = 30, W = 340, padL = 118, padR = 60, H = rows.length * rowH + 8;
   const max = niceMax(Math.max(...rows.map((r) => r[valueKey]), 0));
   const iw = W - padL - padR;
   let s = `<svg viewBox="0 0 ${W} ${Math.max(H, 40)}" role="img">`;
   rows.forEach((r, i) => {
     const y = 4 + i * rowH + (rowH - BAR_MAX) / 2, w = (r[valueKey] / max) * iw;
     s += `<g data-tip="${esc(tipFn(r))}"><rect class="hit" x="0" y="${4 + i * rowH}" width="${W}" height="${rowH}"/>`;
-    s += `<text class="axis-label" x="${padL - 10}" y="${y + BAR_MAX / 2 + 4}" text-anchor="end">${esc(String(r[labelKey]).slice(0, 22))}</text>`;
+    s += `<text class="axis-label" x="${padL - 10}" y="${y + BAR_MAX / 2 + 4}" text-anchor="end">${esc(String(r[labelKey]).slice(0, 16))}</text>`;
     s += `<path class="mark" fill="var(--s1)" d="${rightRoundedRect(padL, y, Math.max(w, 0), BAR_MAX, R)}"/>`;
     s += `<text x="${padL + w + 8}" y="${y + BAR_MAX / 2 + 4}">${esc(fmt(r[valueKey]))}</text></g>`;
   });
@@ -194,10 +196,10 @@ function histogram(values) {
   if (!jpy.length) return `<div class="empty">No completed scans in this range.</div>`;
   const max = niceMax(Math.max(...jpy)), bins = 12, bw = max / bins, counts = new Array(bins).fill(0);
   jpy.forEach((v) => counts[Math.min(bins - 1, Math.floor(v / bw))]++);
-  const W = 640, H = 200, padL = 36, padR = 8, padT = 10, padB = 28, iw = W - padL - padR, ih = H - padT - padB;
-  const cmax = niceMax(Math.max(...counts)), slot = iw / bins, w = Math.min(BAR_MAX, slot - GAP);
+  const W = 340, H = 190, padL = 30, padR = 8, padT = 10, padB = 28, iw = W - padL - padR, ih = H - padT - padB;
+  const cmax = Math.max(...counts), slot = iw / bins, w = Math.min(BAR_MAX, slot - GAP);
   let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Distribution of cost per scan">`;
-  s += `<g class="grid">` + ticks(cmax).map((t) => { const y = padT + ih - (t / cmax) * ih; return `<line x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}"/><text x="${padL - 6}" y="${y + 4}" text-anchor="end">${fmtN(t)}</text>`; }).join("") + `</g>`;
+  s += `<g class="grid">` + countTicks(cmax).map((t) => { const y = padT + ih - (t / cmax) * ih; return `<line x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}"/><text x="${padL - 6}" y="${y + 4}" text-anchor="end">${fmtN(Math.round(t))}</text>`; }).join("") + `</g>`;
   counts.forEach((c, i) => {
     const x = padL + i * slot + (slot - w) / 2, h = (c / cmax) * ih, y = padT + ih - h;
     const lo = i * bw, hi = (i + 1) * bw;
