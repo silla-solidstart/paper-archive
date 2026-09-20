@@ -88,6 +88,9 @@ The product is "Paper Archive" in Japanese too, not 「ペーパーアーカイ�
 katakana line under the wordmark. Roles: 所有者／メンバー. Retention: デジタルで十分／
 しばらく保管／原本を保管／判断が必要. Actions: 支払い・予約・更新・署名・回答・解約.
 Buttons are short noun forms (保存・削除・追加・参加). Confirm dialogs end in 「？」.
+Tabs: 撮影／書類／要対応 (EN Camera／Papers／To do). The user photographs paper, so
+the verb is 撮る／撮影, never スキャン (except scanning a QR); re-do is 撮り直す.
+「アーカイブ」 is reserved for the sharing container, so the list tab is 「書類」/"Papers".
 Half-width `: ` before system error strings.
 
 ## Voice (short)
@@ -101,6 +104,7 @@ when it is unsure.
 Primary actions are ink on paper (light) and paper on ink (dark); vermilion is
 the single highlight (default-archive dot, links, the cursor). Header: mark +
 wordmark left, one avatar/account menu right ("Signed in as", archives with a
-switch, Share, Admin, language, Sign out). Scan screen: a shutter-style camera
-button and an "Upload a file" alternative — no copy. `?theme=light|dark` overrides
+switch, Share, Admin, language, Sign out). Three tabs: Camera (a shutter-style
+button and an "Upload a file" alternative — no copy), Papers (the archive, newest
+first, search field on top), To do. `?theme=light|dark` overrides
 the OS theme for testing.

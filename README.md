@@ -39,7 +39,7 @@ Other routes, session cookie or bearer: `GET /api/me`, `GET /api/documents/:id`,
 `DELETE /api/documents/:id` (trashes the Drive file too),
 `PATCH /api/documents/:id/retention` with `{ "retention": "keep_original", "reason": "..." }`.
 
-The PWA (`public/`, no build step) has Scan / Recent / Actions / Search tabs and a document
+The PWA (`public/`, no build step) has three tabs — Camera / Papers / To do (the archive list with search on top) — and a document
 view; it is installable (manifest + service worker; the shell is cached, the API never is).
 
 Unit economics: `GET /api/costs` (bearer token) — attempts, totals, average and p50/p95 cost

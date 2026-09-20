@@ -1,6 +1,6 @@
 /* Paper Archive — one file, no build step.
  *
- * Screens (hash routes): #/ scan · #/recent · #/actions · #/search · #/doc/:id
+ * Screens (hash routes): #/ camera · #/archive (list + search) · #/actions · #/doc/:id
  *                        #/spaces · #/space/:id · #/join/:token
  * Auth: session cookie from Sign in with Google, or a bearer token pasted into
  * the disclosure on the scan screen (pre-sign-in tester mode).
@@ -48,47 +48,47 @@ try {
 
 const STR = {
   en: {
-    tab_scan: "Scan", tab_recent: "Recent", tab_actions: "Actions", tab_search: "Search",
+    tab_camera: "Camera", tab_archive: "Papers", tab_todo: "To do",
     sub: "Scan it. Know it. Let it go.",
-    scan: "Scan", signin: "Sign in with Google", signout: "Sign out",
+    signin: "Sign in with Google", signout: "Sign out",
     token_toggle: "Use an API token instead",
     preparing: "Preparing…", reading: (kb) => `Reading ${kb} KB… (OCR, then understanding)`,
     failed: "Failed", need_auth: "Sign in, or paste an API token below.",
     not_filed: "Not filed — the space owner hasn't connected Google Drive.",
     not_filed_self: "Not filed — sign in with Google to file scans to your Drive.",
-    filing_failed: "Indexed, but filing to Drive failed. Nothing is kept server-side, so re-scan to file it.",
-    reconnect: (href) => `The space owner's Google access has lapsed — they need to <a href="${href}">sign in again</a>; then re-scan to file it.`,
-    not_in_drive: "Not in Drive — re-scan to file it.",
+    filing_failed: "Indexed, but filing to Drive failed. Nothing is kept server-side, so take it again to file it.",
+    reconnect: (href) => `The space owner's Google access has lapsed — they need to <a href="${href}">sign in again</a>; then take it again to file it.`,
+    not_in_drive: "Not in Drive — take it again to file it.",
     open_drive: "Open in Google Drive",
     retention: { digital_sufficient: "◎ Digital copy likely sufficient", keep_temporarily: "◍ Keep temporarily", keep_original: "◑ Keep original", unsure: "⚠ Unsure — your call" },
     decide: { digital_sufficient: "Digital is enough", keep_temporarily: "Keep for now", keep_original: "Keep original" },
     action_required: "Action required", action: { payment: "payment", appointment: "appointment", renewal: "renewal", signature: "signature", response: "response", cancellation: "cancellation" },
     overdue: (d) => `overdue by ${d}d`, due_today: "due today", due_in: (d) => `due in ${d}d`, due_on: (date) => `due ${date}`,
     pill_review: "review", pill_not_in_drive: "not in Drive",
-    recent: "Recent", needs_action: "Needs action", nothing_yet: "Nothing scanned in this archive yet.", nothing_due: "Nothing needs action.",
-    search_ph: "固定資産税, Tokyo Gas, 上越市…", search_hint: "Search OCR text, titles and issuers. Japanese works.", no_matches: "No matches.",
+    needs_action: "Needs action", nothing_yet: "No papers in this archive yet.", nothing_due: "Nothing needs action.",
+    search_ph: "Property tax, Tokyo Gas, Jōetsu…", no_matches: "No matches.",
     loading: "Loading…", could_not_load: (m) => `Could not load: ${m}`, no_db: "No database configured yet.",
-    gate: "Sign in with Google, or paste an API token on the Scan screen.", not_found: "Not found.",
+    gate: "Sign in with Google, or paste an API token on the Camera screen.", not_found: "Not found.",
     ocr: (pages, chars) => `OCR (${pages} page${pages === 1 ? "" : "s"}, ${chars} chars)`, ocr_text: "OCR text",
-    indexed: "indexed", not_indexed: "not indexed", open: "open", back_recent: "← Recent", delete: "Delete", details: "Details",
+    indexed: "indexed", not_indexed: "not indexed", open: "open", back_archive: "← Papers", delete: "Delete", details: "Details",
     confirm_delete: "Remove this document from the archive? The Drive file is moved to trash.",
     delete_failed: (m) => `Delete failed: ${m}`, save_failed: (m) => `Could not save: ${m}`,
     cost: (jpy, usd, tokens) => `≈ ¥${jpy} (US$${usd}) · ${tokens.toLocaleString()} tokens`,
     cost_short: (jpy) => `≈ ¥${jpy}`,
-    fields: { type: "Type", issuer: "Issuer", date: "Date", amount: "Amount", due: "Due", reference: "Reference", categories: "Categories", status: "Status", model: "Model", ocr: "OCR", lang: "Interpreted in", cost: "Cost", scanned_by: "Scanned by" },
+    fields: { type: "Type", issuer: "Issuer", date: "Date", amount: "Amount", due: "Due", reference: "Reference", categories: "Categories", status: "Status", model: "Model", ocr: "OCR", lang: "Interpreted in", cost: "Cost", scanned_by: "Captured by" },
     doctype: { tax_notice: "Tax notice", government_notice: "Government notice", utility_bill: "Utility bill", insurance: "Insurance", bank_statement: "Bank statement", invoice: "Invoice", receipt: "Receipt", school_letter: "School letter", medical: "Medical", contract: "Contract", subscription: "Subscription", advertisement: "Advertisement", other: "Other" },
     lang_name: { en: "English", ja: "日本語" },
     // spaces
     spaces: "Archives", space: "Archive", your_archive: "Your archive", shared_with_you: "Shared with you", current: "default", owner: "yours", member: "shared",
     members_n: (n) => `${n} ${n === 1 ? "person" : "people"}`,
-    archives_hint: "You have one archive of your own. If someone shares theirs with you, you can make it your default and switch back any time. Scans go into your default archive — yours is stored in your Google Drive, a shared one in its owner's.",
+    archives_hint: "You have one archive of your own. If someone shares theirs with you, you can make it your default and switch back any time. New documents go into your default archive — yours is stored in your Google Drive, a shared one in its owner's.",
     no_shared: "Nobody has shared an archive with you yet.",
     settings: "Settings", rename: "Rename", save: "Save", members: "People", remove: "Remove", leave: "Leave this archive",
     confirm_leave: "Leave this archive? You will no longer see its documents.", confirm_remove: (n) => `Remove ${n} from this archive?`,
     shared_by: (n) => `Shared by ${n}`,
     invites: "Share this archive", invite_hint: "Show the QR or send the link. It works for 7 days, up to 10 people; they sign in with Google and see everything in this archive.",
     create_invite: "Create invite link", copy: "Copy link", copied: "Copied", revoke: "Revoke", expires: (d) => `expires ${d}`, uses: (u, m) => `${u}/${m} used`,
-    where_files_go: (name) => `Files scanned into this archive are stored in its owner's Google Drive, under Paper Archive / ${name}.`,
+    where_files_go: (name) => `Documents you add to this archive are stored in its owner's Google Drive, under Paper Archive / ${name}.`,
     join_title: "Join a space", join_desc: (space, by) => `You've been invited to <b>${esc(space)}</b>${by ? ` by ${esc(by)}` : ""}.`,
     join: "Join", joined: (name) => `You're in ${name}.`, invite_invalid: "This invite link is invalid.", invite_expired: "This invite link has expired or was used up.",
     switch_to: "Make default",
@@ -102,46 +102,46 @@ const STR = {
     costs_title: "Costs, all users", attempts: "scans", spend: "spend", avg_scan: "avg / scan",
   },
   ja: {
-    tab_scan: "スキャン", tab_recent: "最近", tab_actions: "要対応", tab_search: "検索",
+    tab_camera: "撮影", tab_archive: "書類", tab_todo: "要対応",
     sub: "撮る。わかる。手放せる。",
-    scan: "スキャン", signin: "Google でログイン", signout: "ログアウト",
+    signin: "Google でログイン", signout: "ログアウト",
     token_toggle: "APIトークンを使う",
     preparing: "準備中", reading: (kb) => `${kb} KB を読み取り中（OCRのあと解析）`,
     failed: "失敗", need_auth: "ログインするか、下にAPIトークンを入力してください。",
     not_filed: "未保存。アーカイブの所有者がGoogleドライブと連携していません。",
     not_filed_self: "未保存。Googleでログインすると、ドライブに保存されます。",
-    filing_failed: "検索用には登録されましたが、ドライブへの保存に失敗しました。サーバーには残らないため、再スキャンしてください。",
-    reconnect: (href) => `アーカイブ所有者のGoogle連携が切れています。所有者が<a href="${href}">再ログイン</a>してから、再スキャンしてください。`,
-    not_in_drive: "ドライブに未保存。再スキャンしてください。",
+    filing_failed: "検索用には登録されましたが、ドライブへの保存に失敗しました。サーバーには残らないため、撮り直してください。",
+    reconnect: (href) => `アーカイブ所有者のGoogle連携が切れています。所有者が<a href="${href}">再ログイン</a>してから、撮り直してください。`,
+    not_in_drive: "ドライブに未保存。撮り直してください。",
     open_drive: "Googleドライブで開く",
     retention: { digital_sufficient: "◎ デジタルで十分", keep_temporarily: "◍ しばらく保管", keep_original: "◑ 原本を保管", unsure: "⚠ 判断が必要" },
     decide: { digital_sufficient: "デジタルで十分", keep_temporarily: "しばらく保管", keep_original: "原本を保管" },
     action_required: "要対応", action: { payment: "支払い", appointment: "予約", renewal: "更新", signature: "署名", response: "回答", cancellation: "解約" },
     overdue: (d) => `${d}日超過`, due_today: "今日が期限", due_in: (d) => `あと${d}日`, due_on: (date) => `期限 ${date}`,
     pill_review: "要確認", pill_not_in_drive: "未保存",
-    recent: "最近", needs_action: "要対応", nothing_yet: "このアーカイブにはまだ書類がありません。", nothing_due: "いま、やることはありません。",
-    search_ph: "固定資産税、東京ガス、上越市 など", search_hint: "OCRテキスト・タイトル・発行元を検索します。", no_matches: "見つかりませんでした。",
+    needs_action: "要対応", nothing_yet: "このアーカイブにはまだ書類がありません。", nothing_due: "いま、やることはありません。",
+    search_ph: "固定資産税、東京ガス、上越市 など", no_matches: "見つかりませんでした。",
     loading: "読み込み中", could_not_load: (m) => `読み込めませんでした: ${m}`, no_db: "データベースが未設定です。",
-    gate: "Googleでログインするか、スキャン画面でAPIトークンを入力してください。", not_found: "見つかりません。",
+    gate: "Googleでログインするか、撮影画面でAPIトークンを入力してください。", not_found: "見つかりません。",
     ocr: (pages, chars) => `OCR（${pages}ページ、${chars}文字）`, ocr_text: "OCRテキスト",
-    indexed: "登録済み", not_indexed: "未登録", open: "開く", back_recent: "← 最近", delete: "削除", details: "詳細",
+    indexed: "登録済み", not_indexed: "未登録", open: "開く", back_archive: "← 書類", delete: "削除", details: "詳細",
     confirm_delete: "この書類をアーカイブから削除しますか？ドライブのファイルはゴミ箱に移動します。",
     delete_failed: (m) => `削除できませんでした: ${m}`, save_failed: (m) => `保存できませんでした: ${m}`,
     cost: (jpy, usd, tokens) => `約¥${jpy}（US$${usd}）・${tokens.toLocaleString()}トークン`,
     cost_short: (jpy) => `約¥${jpy}`,
-    fields: { type: "種類", issuer: "発行元", date: "日付", amount: "金額", due: "期限", reference: "番号", categories: "分類", status: "状態", model: "モデル", ocr: "OCR", lang: "解析言語", cost: "費用", scanned_by: "スキャンした人" },
+    fields: { type: "種類", issuer: "発行元", date: "日付", amount: "金額", due: "期限", reference: "番号", categories: "分類", status: "状態", model: "モデル", ocr: "OCR", lang: "解析言語", cost: "費用", scanned_by: "撮影した人" },
     doctype: { tax_notice: "納税通知書", government_notice: "行政からの通知", utility_bill: "公共料金", insurance: "保険", bank_statement: "銀行明細", invoice: "請求書", receipt: "領収書", school_letter: "学校からのお知らせ", medical: "医療", contract: "契約書", subscription: "定期契約", advertisement: "広告", other: "その他" },
     lang_name: { en: "English", ja: "日本語" },
     spaces: "アーカイブ", space: "アーカイブ", your_archive: "自分のアーカイブ", shared_with_you: "共有されたアーカイブ", current: "既定", owner: "所有者", member: "メンバー",
     members_n: (n) => `${n}人`,
-    archives_hint: "自分のアーカイブは1つです。共有されたアーカイブを既定にすることもでき、いつでも戻せます。スキャンは既定のアーカイブに入ります。自分のアーカイブは自分のGoogleドライブに、共有されたものは所有者のドライブに保存されます。",
+    archives_hint: "自分のアーカイブは1つです。共有されたアーカイブを既定にすることもでき、いつでも戻せます。撮影した書類は既定のアーカイブに入ります。自分のアーカイブは自分のGoogleドライブに、共有されたものは所有者のドライブに保存されます。",
     no_shared: "まだ共有されたアーカイブはありません。",
     settings: "設定", rename: "名前を変更", save: "保存", members: "メンバー", remove: "削除", leave: "このアーカイブから退出",
     confirm_leave: "このアーカイブから退出しますか？書類は見えなくなります。", confirm_remove: (n) => `${n} をこのアーカイブから削除しますか？`,
     shared_by: (n) => `${n} が共有`,
     invites: "このアーカイブを共有", invite_hint: "QRを見せるか、リンクを送ってください。7日間・最大10人まで有効。相手はGoogleでログインすると、このアーカイブの書類をすべて見られます。",
     create_invite: "招待リンクを作成", copy: "リンクをコピー", copied: "コピーしました", revoke: "無効化", expires: (d) => `有効期限 ${d}`, uses: (u, m) => `${u}/${m}人`,
-    where_files_go: (name) => `このアーカイブでスキャンした書類は、所有者のGoogleドライブ内「Paper Archive / ${name}」に保存されます。`,
+    where_files_go: (name) => `このアーカイブで撮影した書類は、所有者のGoogleドライブ内「Paper Archive / ${name}」に保存されます。`,
     join_title: "アーカイブに参加", join_desc: (space, by) => `${by ? `${esc(by)} から` : ""}<b>${esc(space)}</b> に招待されています。`,
     join: "参加", joined: (name) => `${name} に参加しました。`, invite_invalid: "この招待リンクは無効です。", invite_expired: "この招待リンクは期限切れか、使用回数の上限に達しています。",
     switch_to: "既定にする",
@@ -268,9 +268,9 @@ function renderSpaceBtn() {
 
 const routes = [
   [/^#\/?$/, scanView],
-  [/^#\/recent$/, recentView],
+  [/^#\/archive$/, archiveView],
+  [/^#\/(recent|search)$/, () => { location.hash = "#/archive"; }], // old links
   [/^#\/actions$/, actionsView],
-  [/^#\/search$/, searchView],
   [/^#\/doc\/([0-9a-f-]{36})$/, docView],
   [/^#\/spaces$/, spacesView],
   [/^#\/space\/([0-9a-f-]{36})$/, spaceView],
@@ -373,10 +373,24 @@ async function process(file) {
   }
 }
 
-async function recentView() {
+/** The archive: every document, newest first; typing in the field filters it. */
+async function archiveView() {
   if (gate()) return;
-  view.innerHTML = `<h2>${t("recent")}${state.space ? ` · ${esc(state.space.name)}` : ""}</h2><div id="list" class="empty">${t("loading")}</div>`;
-  await fillList("#list", "/api/recent", t("nothing_yet"), "camera");
+  view.innerHTML = `
+    <h2>${t("tab_archive")}${state.space ? ` · ${esc(state.space.name)}` : ""}</h2>
+    <div class="search"><input id="q" type="search" placeholder="${esc(t("search_ph"))}" autocomplete="off"></div>
+    <div id="list" class="empty">${t("loading")}</div>`;
+  const q = $("#q");
+  let timer, seq = 0;
+  const show = async () => {
+    const v = q.value.trim(), my = ++seq;
+    // A stale response must not overwrite a newer query's list.
+    const el = $("#list"); if (!el) return;
+    if (!v) { await fillList("#list", "/api/recent", t("nothing_yet"), "camera", () => my === seq); return; }
+    await fillList("#list", `/api/search?q=${encodeURIComponent(v)}`, t("no_matches"), "search", () => my === seq);
+  };
+  q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(show, 250); });
+  await show();
 }
 
 async function actionsView() {
@@ -385,31 +399,15 @@ async function actionsView() {
   await fillList("#list", "/api/actions", t("nothing_due"), "circle-check");
 }
 
-async function searchView() {
-  if (gate()) return;
-  view.innerHTML = `
-    <div class="search"><input id="q" type="search" placeholder="${esc(t("search_ph"))}" autofocus></div>
-    <div id="list" class="empty">${t("search_hint")}</div>`;
-  const q = $("#q");
-  let timer;
-  q.addEventListener("input", () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      const v = q.value.trim();
-      if (!v) { $("#list").className = "empty"; $("#list").textContent = t("search_hint"); return; }
-      fillList("#list", `/api/search?q=${encodeURIComponent(v)}`, t("no_matches"), "search");
-    }, 250);
-  });
-}
-
 function emptyState(iconName, text) {
   return `<div class="emptystate">${icon(iconName)}<div>${text}</div></div>`;
 }
 
-async function fillList(sel, path, emptyText, emptyIcon = "inbox") {
+async function fillList(sel, path, emptyText, emptyIcon = "inbox", stillWanted = () => true) {
   const el = $(sel);
   try {
     const { documents } = await api(path);
+    if (!stillWanted() || !el.isConnected) return;
     el.innerHTML = "";
     el.className = documents.length ? "" : "empty";
     if (!documents.length) { el.innerHTML = emptyState(emptyIcon, emptyText); return; }
@@ -459,14 +457,14 @@ async function docView(id) {
       <details><summary class="meta">${t("ocr_text")}</summary><pre>${esc(d.ocr_text || "")}</pre></details>
       <details><summary class="meta">${t("details")}</summary><dl class="fields">${tech.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></details>
       <div class="footer-actions">
-        <a href="#/recent" class="meta">${t("back_recent")}</a>
+        <a href="#/archive" class="meta">${t("back_archive")}</a>
         <button class="small danger" id="del">${icon("trash-2")} ${t("delete")}</button>
       </div>
     </div>`;
   wireDecide(view, d.id);
   $("#del").addEventListener("click", async () => {
     if (!confirm(t("confirm_delete"))) return;
-    try { await api(`/api/documents/${d.id}`, { method: "DELETE" }); location.hash = "#/recent"; }
+    try { await api(`/api/documents/${d.id}`, { method: "DELETE" }); location.hash = "#/archive"; }
     catch (err) { alert(t("delete_failed", err.message)); }
   });
 }
@@ -609,7 +607,7 @@ async function joinView(token) {
       const { space } = await api(`/api/invites/${token}/accept`, { method: "POST" });
       try { localStorage.removeItem("pa_pending_invite"); } catch {}
       await whoami(); state.lastResult = null;
-      view.innerHTML = `<div class="card"><h3>${t("join_title")}</h3><p>${t("joined", esc(space.name))}</p><div class="decide"><a href="#/recent"><button>${t("tab_recent")}</button></a></div></div>`;
+      view.innerHTML = `<div class="card"><h3>${t("join_title")}</h3><p>${t("joined", esc(space.name))}</p><div class="decide"><a href="#/archive"><button>${t("tab_archive")}</button></a></div></div>`;
     } catch (err) { view.querySelector(".card").insertAdjacentHTML("beforeend", `<div class="notice">${err.status === 410 ? t("invite_expired") : t("invite_invalid")}</div>`); }
   });
   const js = $("#joinSignin");
