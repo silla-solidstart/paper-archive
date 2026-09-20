@@ -162,3 +162,6 @@ dl.fields dd { margin: 0; word-break: break-word; }
 .addrow input, .addrow select { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 15px; }
 .addrow .full { grid-column: 1 / -1; }
 .stat { display: inline-block; margin: 6px 18px 0 0; } .stat b { display: block; font-size: 20px; }
+
+.emptystate { text-align: center; color: var(--muted); padding: 40px 0; }
+.emptystate svg { width: 36px; height: 36px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; opacity: .7; margin-bottom: 8px; }

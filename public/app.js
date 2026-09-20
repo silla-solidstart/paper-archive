@@ -65,12 +65,12 @@ const STR = {
     action_required: "Action required", action: { payment: "payment", appointment: "appointment", renewal: "renewal", signature: "signature", response: "response", cancellation: "cancellation" },
     overdue: (d) => `overdue by ${d}d`, due_today: "due today", due_in: (d) => `due in ${d}d`, due_on: (date) => `due ${date}`,
     pill_review: "review", pill_not_in_drive: "not in Drive",
-    recent: "Recent", needs_action: "Needs action", nothing_yet: "Nothing scanned in this space yet.", nothing_due: "Nothing needs action.",
+    recent: "Recent", needs_action: "Needs action", nothing_yet: "Nothing scanned in this archive yet.", nothing_due: "Nothing needs action.",
     search_ph: "固定資産税, Tokyo Gas, 上越市…", search_hint: "Search OCR text, titles and issuers. Japanese works.", no_matches: "No matches.",
     loading: "Loading…", could_not_load: (m) => `Could not load: ${m}`, no_db: "No database configured yet.",
     gate: "Sign in with Google, or paste an API token on the Scan screen.", not_found: "Not found.",
     ocr: (pages, chars) => `OCR (${pages} page${pages === 1 ? "" : "s"}, ${chars} chars)`, ocr_text: "OCR text",
-    indexed: "indexed", not_indexed: "not indexed", open: "open", back_recent: "← Recent", delete: "Delete",
+    indexed: "indexed", not_indexed: "not indexed", open: "open", back_recent: "← Recent", delete: "Delete", details: "Details",
     confirm_delete: "Remove this document from the archive? The Drive file is moved to trash.",
     delete_failed: (m) => `Delete failed: ${m}`, save_failed: (m) => `Could not save: ${m}`,
     cost: (jpy, usd, tokens) => `≈ ¥${jpy} (US$${usd}) · ${tokens.toLocaleString()} tokens`,
@@ -124,7 +124,7 @@ const STR = {
     loading: "読み込み中…", could_not_load: (m) => `読み込めませんでした: ${m}`, no_db: "データベースが未設定です。",
     gate: "Googleでログインするか、スキャン画面でAPIトークンを入力してください。", not_found: "見つかりません。",
     ocr: (pages, chars) => `OCR（${pages}ページ、${chars}文字）`, ocr_text: "OCRテキスト",
-    indexed: "登録済み", not_indexed: "未登録", open: "開く", back_recent: "← 最近", delete: "削除",
+    indexed: "登録済み", not_indexed: "未登録", open: "開く", back_recent: "← 最近", delete: "削除", details: "詳細",
     confirm_delete: "この書類をアーカイブから削除しますか？ドライブのファイルはゴミ箱に移動します。",
     delete_failed: (m) => `削除に失敗: ${m}`, save_failed: (m) => `保存できませんでした: ${m}`,
     cost: (jpy, usd, tokens) => `約¥${jpy}（US$${usd}）・${tokens.toLocaleString()}トークン`,
@@ -376,13 +376,13 @@ async function process(file) {
 async function recentView() {
   if (gate()) return;
   view.innerHTML = `<h2>${t("recent")}${state.space ? ` · ${esc(state.space.name)}` : ""}</h2><div id="list" class="empty">${t("loading")}</div>`;
-  await fillList("#list", "/api/recent", t("nothing_yet"));
+  await fillList("#list", "/api/recent", t("nothing_yet"), "camera");
 }
 
 async function actionsView() {
   if (gate()) return;
   view.innerHTML = `<h2>${t("needs_action")}</h2><div id="list" class="empty">${t("loading")}</div>`;
-  await fillList("#list", "/api/actions", t("nothing_due"));
+  await fillList("#list", "/api/actions", t("nothing_due"), "circle-check");
 }
 
 async function searchView() {
@@ -397,18 +397,22 @@ async function searchView() {
     timer = setTimeout(() => {
       const v = q.value.trim();
       if (!v) { $("#list").className = "empty"; $("#list").textContent = t("search_hint"); return; }
-      fillList("#list", `/api/search?q=${encodeURIComponent(v)}`, t("no_matches"));
+      fillList("#list", `/api/search?q=${encodeURIComponent(v)}`, t("no_matches"), "search");
     }, 250);
   });
 }
 
-async function fillList(sel, path, emptyText) {
+function emptyState(iconName, text) {
+  return `<div class="emptystate">${icon(iconName)}<div>${text}</div></div>`;
+}
+
+async function fillList(sel, path, emptyText, emptyIcon = "inbox") {
   const el = $(sel);
   try {
     const { documents } = await api(path);
     el.innerHTML = "";
     el.className = documents.length ? "" : "empty";
-    if (!documents.length) { el.textContent = emptyText; return; }
+    if (!documents.length) { el.innerHTML = emptyState(emptyIcon, emptyText); return; }
     for (const d of documents) el.appendChild(listCard(d));
   } catch (err) {
     el.className = "empty";
@@ -431,10 +435,13 @@ async function docView(id) {
     [F.due, x.due_date], [F.reference, x.reference_number],
     [F.categories, Array.isArray(x.categories) ? x.categories.join(", ") : null],
     ...Object.entries(x).filter(([k]) => !["amount", "currency", "due_date", "reference_number", "categories"].includes(k)).map(([k, v]) => [k, String(v)]),
+  ].filter(([, v]) => v != null && v !== "");
+  // Operational rows: useful to the operator, noise to a household member.
+  const tech = [
     [F.status, d.status + (d.error ? ` — ${d.error}` : "")],
     [F.lang, d.lang ? t("lang_name")[d.lang] || d.lang : null],
-    [F.cost, d.cost_usd != null ? costLine({ total_usd: Number(d.cost_usd), total_jpy: Number(d.cost_usd) * 150, tokens: (d.llm_input_tokens || 0) + (d.llm_output_tokens || 0) }) : null],
-    [F.model, d.extraction_model], [F.ocr, d.ocr_provider],
+    [F.cost, state.admin && d.cost_usd != null ? costLine({ total_usd: Number(d.cost_usd), total_jpy: Number(d.cost_usd) * 150, tokens: (d.llm_input_tokens || 0) + (d.llm_output_tokens || 0) }) : null],
+    [F.model, state.admin ? d.extraction_model : null], [F.ocr, state.admin ? d.ocr_provider : null],
   ].filter(([, v]) => v != null && v !== "");
 
   const driveLink = d.drive_file_id ? `https://drive.google.com/file/d/${encodeURIComponent(d.drive_file_id)}/view` : null;
@@ -450,6 +457,7 @@ async function docView(id) {
                   : d.status === "failed" ? `<div class="notice">${t("not_in_drive")}</div>` : ""}
       <dl class="fields">${fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
       <details><summary class="meta">${t("ocr_text")}</summary><pre>${esc(d.ocr_text || "")}</pre></details>
+      <details><summary class="meta">${t("details")}</summary><dl class="fields">${tech.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></details>
       <div class="footer-actions">
         <a href="#/recent" class="meta">${t("back_recent")}</a>
         <button class="small danger" id="del">${icon("trash-2")} ${t("delete")}</button>
@@ -752,7 +760,7 @@ function listCard(d) {
   a.className = "card"; a.href = `#/doc/${d.id}`;
   const due = d.action_required ? dueInfo(d.action_date) : null;
   const meta = [d.issuer, d.document_date].filter(Boolean).join(" · ");
-  const jpy = d.cost_usd != null ? Math.round(Number(d.cost_usd) * 150 * 10) / 10 : null;
+  const jpy = state.admin && d.cost_usd != null ? Math.round(Number(d.cost_usd) * 150 * 10) / 10 : null;
   a.innerHTML = `
     <h3>${esc(d.title || "(untitled)")}</h3>
     <div class="row">
@@ -782,7 +790,7 @@ function resultCard(data) {
     <div class="keep" id="keep">${retentionLabel(x.retention)} <span class="meta">— ${esc(x.retention_reason)}</span></div>
     ${data.id ? decideButtons(data.id) : ""}
     ${drive}
-    ${data.cost ? `<div class="meta">${t("fields").cost}: ${esc(costLine(data.cost))}</div>` : ""}
+    ${state.admin && data.cost ? `<div class="meta">${t("fields").cost}: ${esc(costLine(data.cost))}</div>` : ""}
     <details><summary class="meta">${t("ocr", data.ocr.pages, data.ocr.chars)} · ${data.id ? `<a href="#/doc/${data.id}">${t("open")}</a>` : t("not_indexed")}</summary><pre>${esc(data.ocr.text)}</pre></details>`;
   if (data.id) wireDecide(el, data.id);
   return el;
