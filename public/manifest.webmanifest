@@ -1,7 +1,7 @@
 {
   "name": "Paper Archive",
   "short_name": "Paper",
-  "description": "Scan it. Forget it. Find it. Paper mail that explains itself.",
+  "description": "Scan it. Know it. Let it go. Know what's due; find it after it's gone.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

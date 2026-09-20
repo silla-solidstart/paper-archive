@@ -31,8 +31,8 @@ const STYLE = GOOGLE_BUTTON_CSS + `
   a.link { color: var(--accent); }
   .who { font-size: 13px; color: var(--muted); margin-top: 20px; }
   .toggle { font-size: 13px; margin-top: 26px; } .toggle a { color: var(--muted); text-decoration: none; } .toggle b { color: var(--fg); font-weight: 500; }
-  h1.tag { font-size: 26px; line-height: 1.25; margin: 18px 0 8px; letter-spacing: -0.01em; }
-  p.lead { color: var(--fg); opacity: .8; max-width: 380px; margin: 0 auto; }
+  h1.tag { font-size: 26px; line-height: 1.25; margin: 18px 0 8px; letter-spacing: -0.01em; word-break: keep-all; overflow-wrap: anywhere; }
+  p.lead { color: var(--fg); opacity: .8; max-width: 380px; margin: 0 auto; word-break: keep-all; }
   a.pill { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 14px; color: var(--muted); text-decoration: none;
            padding: 8px 14px; border: 1px solid rgba(128,128,128,.35); border-radius: 999px; }
   a.pill:hover { color: var(--fg); }
@@ -41,26 +41,31 @@ const STYLE = GOOGLE_BUTTON_CSS + `
   .qrbox svg.qr { display: block; width: 100%; height: auto; background: #fff; border-radius: 12px; }
   .url { font-size: 15px; color: var(--fg); margin-top: 12px; word-break: break-all; }
   .hint { font-size: 14px; color: var(--muted); margin-top: 4px; }
-  body.share { cursor: pointer; }
+  /* share: mark pinned top, QR centred in the viewport, back pinned bottom */
+  body.share { cursor: pointer; display: flex; flex-direction: column; place-items: initial; min-height: 100vh; min-height: 100dvh; padding: 0; }
+  body.share .top { padding: calc(28px + env(safe-area-inset-top)) 0 0; text-align: center; }
+  body.share .mid { flex: 1; display: grid; place-items: center; padding: 16px 24px; }
+  body.share .mid .qrbox { margin: 0; }
+  body.share .bot { padding: 0 0 calc(28px + env(safe-area-inset-bottom)); text-align: center; }
   @media print { body { background: #fff; color: #000; } .qrbox { width: 70vw; max-width: 520px; } a.pill, .toggle, .noprint { display: none !important; } }
 `;
 
-const page = (title: string, body: string, lang: ButtonLang = "en", bodyClass = "") =>
+const page = (title: string, body: string, lang: ButtonLang = "en", bodyClass = "", bare = false) =>
   `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${title}</title><link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Roboto:wght@500&display=swap" rel="stylesheet">
 <style>${STYLE}</style></head>
-<body class="${bodyClass}"><main>${MARK}${body}</main></body></html>`;
+<body class="${bodyClass}">${bare ? body : `<main>${MARK}${body}</main>`}</body></html>`;
 
 const COPY = {
   en: {
-    tag: "Scan it. Forget it. Find it.",
-    lead: "Paper mail that explains itself — what it is, what it wants from you, and whether you can throw it away.",
+    tag: "Scan it. Know it. Let it go.",
+    lead: "Know what's due. Find it after it's gone.",
     who: "Invite only", share: "Share", share_hint: "Scan to open Paper Archive",
   },
   ja: {
-    tag: "撮る。忘れる。見つかる。",
-    lead: "撮るだけで、わかる。何の書類か、何をすべきか、捨てていいか。",
+    tag: "撮る。わかる。手放せる。",
+    lead: "いつ何をするかわかる。捨てても探せる。",
     who: "招待制", share: "共有", share_hint: "スキャンするとPaper Archiveが開きます",
   },
 };
@@ -111,8 +116,9 @@ export function sharePage(lang: ButtonLang): Response {
   return new Response(
     page(
       lang === "ja" ? "ペーパーアーカイブを共有" : "Share Paper Archive",
-      `<div class="qrbox">${SITE_QR_SVG}</div>
-       <p class="noprint"><a class="pill" href="/?lang=${lang}">${back}</a></p>
+      `<div class="top">${MARK}</div>
+       <div class="mid"><div class="qrbox">${SITE_QR_SVG}</div></div>
+       <div class="bot noprint"><a class="pill" href="/?lang=${lang}">${back}</a></div>
        <script>
          // Tap anywhere that is not the button to go back; Escape too.
          document.body.addEventListener("click", (e) => { if (!e.target.closest("a")) location.href = "/?lang=${lang}"; });
@@ -120,6 +126,7 @@ export function sharePage(lang: ButtonLang): Response {
        </script>`,
       lang,
       "share",
+      true,
     ),
     { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300", Vary: "Accept-Language" } },
   );

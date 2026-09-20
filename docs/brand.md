@@ -63,12 +63,23 @@ in use are vendored, as inline SVG in `public/icons.js`; add more by extending t
 name list in the generator step recorded in `public/vendor/README.txt`. No emoji in
 the interface; the retention glyphs ◎ ◍ ◑ ⚠ are typographic and stay.
 
-## Copy
+## Copy (editor-reviewed, adopted 2026-09-20)
 
-Headline: **Scan it. Forget it. Find it.** / **撮る。忘れる。見つかる。**
-Supporting line: *Paper mail that explains itself — what it is, what it wants from you,
-and whether you can throw it away.* / *撮るだけで、わかる。何の書類か、何をすべきか、捨てていいか。* The pipeline arrows (scan → understand → decide) are
-not copy; they are a diagram, and they were retired on 2026-09-20.
+Headline: **撮る。わかる。手放せる。** / **Scan it. Know it. Let it go.**
+Supporting: **いつ何をするかわかる。捨てても探せる。** / **Know what's due. Find it after it's gone.**
+
+Why it works (editor's note): a three-beat run of verbs reads as a timeline in
+Japanese — action → result → release — as long as each verb can silently take 紙 as
+its object. 忘れる could not (rejected); わかる and 手放せる can. The supporting line
+says what わかる contains and why 手放せる is safe. No personification, no value words
+stated outright (安心, 簡単), no 捨てる in the headline (some originals must be kept;
+捨てても探せる is honest because it is conditional).
+
+Typography: full-width 「。」「、」, a 。 after the last beat too, no space after
+punctuation; wrap only after punctuation (`word-break: keep-all`); ひらがな for
+わかる／やること／捨てていいか; no 「！」「…」「〜」. English in sentence case, no
+exclamation marks. Retired: the pipeline arrows, 「撮る。忘れる。見つかる。」,
+「届いた紙が、自分で説明してくれる。」.
 
 ## Voice (short)
 

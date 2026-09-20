@@ -42,7 +42,7 @@ try {
 const STR = {
   en: {
     tab_scan: "Scan", tab_recent: "Recent", tab_actions: "Actions", tab_search: "Search",
-    sub: "Scan it. Forget it. Find it.",
+    sub: "Scan it. Know it. Let it go.",
     scan: "Scan", signin: "Sign in with Google", signout: "Sign out",
     token_toggle: "Use an API token instead",
     preparing: "Preparing…", reading: (kb) => `Reading ${kb} KB… (OCR, then understanding)`,
@@ -82,7 +82,7 @@ const STR = {
     join_title: "Join a space", join_desc: (space, by) => `You've been invited to <b>${esc(space)}</b>${by ? ` by ${esc(by)}` : ""}.`,
     join: "Join", joined: (name) => `You're in ${name}.`, invite_invalid: "This invite link is invalid.", invite_expired: "This invite link has expired or was used up.",
     switch_to: "Switch",
-    share: "Share", share_app: "Share the app", share_app_hint: "Scan it. Forget it. Find it. — print this and put it where the mail lands.",
+    share: "Share", share_app: "Share the app", share_app_hint: "Scan it. Know it. Let it go. Print this and put it where the mail lands.",
     share_space: (n) => `Invite to ${n}`, share_space_hint: "Scan to join this space. The link works for 7 days, up to 10 people; they sign in with Google.",
     share_native: "Share…", print: "Print", open_link: "Open",
     admin: "Admin", admin_title: "Who can sign in", admin_hint: "Invite-only. Add an email, or @domain for everyone at a domain. Removal takes effect on their next request.",
@@ -92,7 +92,7 @@ const STR = {
   },
   ja: {
     tab_scan: "スキャン", tab_recent: "最近", tab_actions: "要対応", tab_search: "検索",
-    sub: "撮る。忘れる。見つかる。",
+    sub: "撮る。わかる。手放せる。",
     scan: "スキャン", signin: "Google でログイン", signout: "ログアウト",
     token_toggle: "APIトークンを使う",
     preparing: "準備中…", reading: (kb) => `読み取り中 ${kb} KB…（OCR → 解析）`,
@@ -131,7 +131,7 @@ const STR = {
     join_title: "スペースに参加", join_desc: (space, by) => `<b>${esc(space)}</b> に招待されています${by ? `（${esc(by)} から）` : ""}。`,
     join: "参加する", joined: (name) => `${name} に参加しました。`, invite_invalid: "この招待リンクは無効です。", invite_expired: "この招待リンクは期限切れか、使用回数の上限に達しています。",
     switch_to: "切替",
-    share: "共有", share_app: "アプリを共有", share_app_hint: "撮る。忘れる。見つかる。— 印刷して郵便物の置き場に貼っておくと便利です。",
+    share: "共有", share_app: "アプリを共有", share_app_hint: "撮る。わかる。手放せる。印刷して、郵便物の置き場に。",
     share_space: (n) => `「${n}」に招待`, share_space_hint: "スキャンするとこのスペースに参加できます。リンクは7日間・最大10人まで有効。参加にはGoogleログインが必要です。",
     share_native: "共有…", print: "印刷", open_link: "開く",
     admin: "管理", admin_title: "ログインできる人", admin_hint: "招待制です。メールアドレス、またはドメイン全体なら @ドメイン を追加します。削除は次のリクエストから反映されます。",
