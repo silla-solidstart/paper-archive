@@ -19,7 +19,9 @@ body { font: 16px/1.5 -apple-system, "Hiragino Sans", "Noto Sans JP", system-ui,
 .search button.small { flex: 0 0 auto; }
 .top { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 10px;
        padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: var(--bg); border-bottom: 1px solid var(--line); }
-.brand { font-weight: 700; margin-right: auto; }
+.brand { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+.brandmark { width: 28px; height: 28px; color: var(--fg); }
+.wordmark { font: 600 17px/1 'IBM Plex Sans JP', -apple-system, system-ui, sans-serif; letter-spacing: -0.01em; }
 .who { font-size: 13px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .who a { color: var(--accent); }
 

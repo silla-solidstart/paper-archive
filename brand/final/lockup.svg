@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400">
+      <g transform="translate(60 44) scale(0.61)">
+      <rect x="92" y="212" width="212" height="212" rx="26" fill="#1e2a44"/>
+      <rect x="156" y="152" width="212" height="212" rx="26" fill="#e34234" stroke="#f6f3ee" stroke-width="10"/>
+      <rect x="220" y="92" width="212" height="212" rx="26" fill="#f6f3ee" stroke="#1e2a44" stroke-width="24"/>
+      <rect x="258" y="154" width="136" height="94" rx="12" fill="none" stroke="#1e2a44" stroke-width="18"/>
+      <path d="M258 170 L326 222 L394 170" fill="none" stroke="#1e2a44" stroke-width="18" stroke-linejoin="round"/></g>
+      <text x="400" y="196" font-family="'IBM Plex Sans JP', 'IBM Plex Sans', Inter, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="104" font-weight="600" letter-spacing="-2" fill="#1e2a44">Paper Archive</text>
+      <text x="404" y="272" font-family="'IBM Plex Sans JP', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif" font-size="46" font-weight="500" fill="#1e2a44" opacity="0.72">ペーパーアーカイブ</text>
+</svg>

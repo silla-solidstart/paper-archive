@@ -122,8 +122,7 @@ const marks = {
   },
   "7a-dup-envelope": {
     title: "Duplicate + envelope (two cards)",
-    blurb: "The duplicate icon: a vermilion card behind, a paper card in front carrying the envelope. The search lives in the wordmark.",
-    lockupStyle: "search",
+    blurb: "The duplicate icon: a vermilion card behind, a paper card in front carrying the envelope. Plain wordmark.",
     draw: (c) => `
       <rect x="108" y="176" width="236" height="236" rx="28" fill="${c.accent}"/>
       <rect x="168" y="100" width="236" height="236" rx="28" fill="${c.bg}" stroke="${c.ink}" stroke-width="24"/>
@@ -133,7 +132,6 @@ const marks = {
   "7b-stack-envelope": {
     title: "Stack + envelope (three cards)",
     blurb: "Same idea with a third card: ink at the back, vermilion in the middle, the envelope in front. Reads as an archive.",
-    lockupStyle: "search",
     draw: (c) => `
       <rect x="92" y="212" width="212" height="212" rx="26" fill="${c.ink}"/>
       <rect x="156" y="152" width="212" height="212" rx="26" fill="${c.accent}" stroke="${c.bg}" stroke-width="10"/>
@@ -164,8 +162,9 @@ function icon(m) {
       <g transform="translate(51.2 51.2) scale(0.8)">${m.draw(c)}</g>`);
 }
 
-const LATIN = `Inter, -apple-system, 'Helvetica Neue', Arial, sans-serif`;
-const JA = `'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif`;
+// Brand typeface: IBM Plex Sans JP (Latin + Japanese designed together). Fallbacks for environments without it.
+const LATIN = `'IBM Plex Sans JP', 'IBM Plex Sans', Inter, -apple-system, 'Helvetica Neue', Arial, sans-serif`;
+const JA = `'IBM Plex Sans JP', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif`;
 
 /** "Paper Archive" as the query typed into a search field; the mark sits to the left. */
 function lockupSearch(m, c, textInk) {
@@ -186,6 +185,38 @@ function lockup(m, c, textInk) {
       <text x="400" y="196" font-family="${LATIN}" font-size="104" font-weight="600" letter-spacing="-2" fill="${textInk}">Paper Archive</text>
       <text x="404" y="272" font-family="${JA}" font-size="46" font-weight="500" fill="${textInk}" opacity="0.72">ペーパーアーカイブ</text>`);
 }
+
+/** Full-bleed square (no rounding): the OS applies its own mask to PWA / home-screen icons. */
+function iconSquare(m) {
+  const c = { ink: PALETTE.white, accent: PALETTE.accent, bg: PALETTE.ink };
+  return svg(512, 512, `
+      <rect width="512" height="512" fill="${PALETTE.ink}"/>
+      <g transform="translate(51.2 51.2) scale(0.8)">${m.draw(c)}</g>`);
+}
+
+// ---------- final ----------
+
+export const FINAL = "7b-stack-envelope";
+function emitFinal() {
+  const m = marks[FINAL];
+  const d = path.join(here, "final");
+  mkdirSync(d, { recursive: true });
+  const light = { ink: PALETTE.ink, accent: PALETTE.accent, bg: PALETTE.paper };
+  const dark = { ink: PALETTE.white, accent: PALETTE.accent, bg: PALETTE.dark };
+  const mono = { ink: PALETTE.ink, accent: PALETTE.ink, bg: PALETTE.paper };
+  const files = {
+    "mark.svg": mark(m, light), "mark-dark.svg": mark(m, dark), "mark-mono.svg": mark(m, mono),
+    "icon-rounded.svg": icon(m), "icon-square.svg": iconSquare(m),
+    "lockup.svg": lockup(m, light, PALETTE.ink), "lockup-dark.svg": lockup(m, dark, PALETTE.white),
+    // for inlining in HTML: ink = currentColor, card face = the page background
+    "mark-inline.svg": svg(512, 512, m.draw({ ink: "currentColor", accent: PALETTE.accent, bg: "var(--bg)" })),
+    // favicon: the mark on transparent, viewBox only, scales to any size
+    "favicon.svg": svg(512, 512, m.draw({ ink: PALETTE.ink, accent: PALETTE.accent, bg: PALETTE.white })),
+  };
+  for (const [name, content] of Object.entries(files)) writeFileSync(path.join(d, name), content);
+  console.log(`final (${FINAL}) → brand/final/`);
+}
+if (process.env.FINAL) emitFinal();
 
 // ---------- emit ----------
 

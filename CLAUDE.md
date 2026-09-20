@@ -102,6 +102,11 @@ operator view; it never needs deploying. Prices live
 in `src/pricing.ts`, dated; check them when `PRICING_AS_OF` is stale. See
 `docs/costs.md` for the pricing model.
 
+## Brand
+
+See `docs/brand.md`. Mark = three-card stack with envelope; type = IBM Plex Sans JP;
+palette navy `#1e2a44` + vermilion `#e34234`. Regenerate with `FINAL=1 node brand/build.mjs`.
+
 ## Filing format
 
 JPEG scans are filed as single-page PDFs with the JPEG embedded verbatim

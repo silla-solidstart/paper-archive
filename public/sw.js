@@ -1,7 +1,7 @@
 /* App-shell cache only. API, auth and MCP always go to the network. */
-const VERSION = "pa-shell-v4";
+const VERSION = "pa-shell-v5";
 const SHELL = ["/", "/index.html", "/app.js", "/styles.css", "/manifest.webmanifest",
-               "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/vendor/qrcode.mjs"];
+               "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png", "/icons/favicon.svg", "/vendor/qrcode.mjs"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
