@@ -15,7 +15,7 @@ const MAX_EDGE = 2200;
 const JPEG_QUALITY = 0.85;
 
 const $ = (sel, el = document) => el.querySelector(sel);
-const view = $("#view"), who = $("#who"), fileInput = $("#file"), langBtn = $("#lang"), spaceBtn = $("#space");
+const view = $("#view"), who = $("#who"), fileInput = $("#file"), langBtn = $("#lang"), spaceBtn = $("#space"), shareBtn = $("#shareBtn");
 
 const state = { signedIn: false, user: null, space: null, token: "", lastResult: null, lang: "en" };
 try { state.token = localStorage.getItem("pa_token") || ""; } catch {}
@@ -69,6 +69,9 @@ const STR = {
     join_title: "Join a space", join_desc: (space, by) => `You've been invited to <b>${esc(space)}</b>${by ? ` by ${esc(by)}` : ""}.`,
     join: "Join", join_signin: "Sign in with Google to join", joined: (name) => `You're in ${name}.`, invite_invalid: "This invite link is invalid.", invite_expired: "This invite link has expired or was used up.",
     switch_to: "Switch",
+    share: "Share", share_app: "Share the app", share_app_hint: "Scan to open Paper Archive. Print it and put it where the mail lands.",
+    share_space: (n) => `Invite to ${n}`, share_space_hint: "Scan to join this space. The link works for 7 days, up to 10 people; they sign in with Google.",
+    share_native: "Share…", print: "Print", open_link: "Open",
   },
   ja: {
     tab_scan: "スキャン", tab_recent: "最近", tab_actions: "要対応", tab_search: "検索",
@@ -111,6 +114,9 @@ const STR = {
     join_title: "スペースに参加", join_desc: (space, by) => `<b>${esc(space)}</b> に招待されています${by ? `（${esc(by)} から）` : ""}。`,
     join: "参加する", join_signin: "Googleでログインして参加", joined: (name) => `${name} に参加しました。`, invite_invalid: "この招待リンクは無効です。", invite_expired: "この招待リンクは期限切れか、使用回数の上限に達しています。",
     switch_to: "切替",
+    share: "共有", share_app: "アプリを共有", share_app_hint: "スキャンするとPaper Archiveが開きます。印刷して郵便物の置き場に貼っておくと便利です。",
+    share_space: (n) => `「${n}」に招待`, share_space_hint: "スキャンするとこのスペースに参加できます。リンクは7日間・最大10人まで有効。参加にはGoogleログインが必要です。",
+    share_native: "共有…", print: "印刷", open_link: "開く",
   },
 };
 const t = (key, ...args) => { const v = STR[state.lang][key]; return typeof v === "function" ? v(...args) : v; };
@@ -121,8 +127,10 @@ function applyLang() {
   document.querySelectorAll(".tabs a").forEach((a) => { a.lastChild.textContent = t("tab_" + a.dataset.tab); });
   langBtn.textContent = state.lang === "en" ? "日本語" : "EN";
   langBtn.title = t("lang_name")[state.lang === "en" ? "ja" : "en"];
+  shareBtn.textContent = "⇪ " + t("share");
   renderSpaceBtn();
 }
+shareBtn.addEventListener("click", () => { location.hash = "#/share"; });
 langBtn.addEventListener("click", () => {
   state.lang = state.lang === "en" ? "ja" : "en";
   try { localStorage.setItem("pa_lang", state.lang); } catch {}
@@ -185,6 +193,7 @@ const routes = [
   [/^#\/spaces$/, spacesView],
   [/^#\/space\/([0-9a-f-]{36})$/, spaceView],
   [/^#\/join\/([A-Za-z0-9_-]{20,64})$/, joinView],
+  [/^#\/share$/, shareView],
 ];
 
 async function route() {
@@ -506,6 +515,71 @@ async function joinView(token) {
   });
   const js = $("#joinSignin");
   if (js) js.addEventListener("click", () => { try { localStorage.setItem("pa_pending_invite", token); } catch {} });
+}
+
+// ---------- share (QR) ----------
+
+async function shareView() {
+  view.innerHTML = `<div class="empty">${t("loading")}</div>`;
+  // Loaded on demand: the encoder is only needed here.
+  const { default: qrcode } = await import("/vendor/qrcode.mjs");
+  const render = (el, text) => {
+    const qr = qrcode(0, "M");
+    qr.addData(text);
+    qr.make();
+    el.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 4, scalable: true });
+    el.querySelector("svg").setAttribute("role", "img");
+    el.querySelector("svg").setAttribute("aria-label", text);
+  };
+  const appUrl = location.origin + "/";
+  const canInvite = Boolean(state.space) && canCall();
+
+  view.innerHTML = `
+    <div class="card share">
+      <h3>${t("share_app")}</h3>
+      <div class="meta">${t("share_app_hint")}</div>
+      <div class="qr" id="qrApp"></div>
+      <div class="url">${esc(appUrl)}</div>
+      <div class="decide">
+        <button data-copy="${esc(appUrl)}">${t("copy")}</button>
+        ${navigator.share ? `<button data-share="${esc(appUrl)}">${t("share_native")}</button>` : ""}
+        <button id="printBtn">${t("print")}</button>
+      </div>
+    </div>
+    ${canInvite ? `
+    <div class="card share">
+      <h3>${t("share_space", esc(state.space.name))}</h3>
+      <div class="meta">${t("share_space_hint")}</div>
+      <div class="qr" id="qrInvite"></div>
+      <div class="url" id="inviteUrl"></div>
+      <div class="decide" id="inviteActions"><button id="mkQr">${t("create_invite")}</button></div>
+    </div>` : ""}`;
+
+  render($("#qrApp"), appUrl);
+  wireShareButtons(view);
+  $("#printBtn").addEventListener("click", () => window.print());
+
+  const mk = $("#mkQr");
+  if (mk) mk.addEventListener("click", async () => {
+    mk.disabled = true;
+    try {
+      const inv = await api(`/api/spaces/${state.space.id}/invites`, { method: "POST" });
+      render($("#qrInvite"), inv.url);
+      $("#inviteUrl").textContent = inv.url;
+      $("#inviteActions").innerHTML = `<button data-copy="${esc(inv.url)}">${t("copy")}</button>${navigator.share ? `<button data-share="${esc(inv.url)}">${t("share_native")}</button>` : ""}<span class="meta">${t("expires", inv.expires_at.slice(0, 10))}</span>`;
+      wireShareButtons($("#inviteActions"));
+    } catch (err) { mk.disabled = false; alert(err.message); }
+  });
+}
+
+function wireShareButtons(root) {
+  root.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); const o = b.textContent; b.textContent = t("copied"); setTimeout(() => (b.textContent = o), 1500); }
+    catch { prompt("", b.dataset.copy); }
+  }));
+  root.querySelectorAll("[data-share]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.share({ title: "Paper Archive", url: b.dataset.share }); } catch {}
+  }));
 }
 
 // ---------- cards ----------

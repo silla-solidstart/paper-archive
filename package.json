@@ -13,6 +13,7 @@
     "@anthropic-ai/sdk": "^0.126.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@neondatabase/serverless": "^1.0.0",
+    "qrcode-generator": "^2.0.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {

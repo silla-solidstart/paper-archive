@@ -14,12 +14,12 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 body { font: 16px/1.5 -apple-system, "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
        padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom)); }
 
-.top #lang, .top #space { margin-left: 8px; }
+.top #lang, .top #space, .top #shareBtn { margin-left: 8px; }
 .top #space { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search button.small { flex: 0 0 auto; }
-.top { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+.top { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 10px;
        padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: var(--bg); border-bottom: 1px solid var(--line); }
-.brand { font-weight: 700; }
+.brand { font-weight: 700; margin-right: auto; }
 .who { font-size: 13px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .who a { color: var(--accent); }
 
@@ -74,3 +74,22 @@ dl.fields { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px
 dl.fields dt { color: var(--muted); }
 dl.fields dd { margin: 0; word-break: break-word; }
 .footer-actions { display: flex; justify-content: space-between; margin-top: 16px; }
+
+/* share / QR */
+.card.share { text-align: center; }
+.card.share .meta { text-align: left; }
+.qr { width: 240px; max-width: 100%; margin: 14px auto 8px; }
+.qr svg { display: block; width: 100%; height: auto; background: #fff; border-radius: 8px; }
+.url { font-size: 13px; color: var(--muted); word-break: break-all; margin-bottom: 8px; }
+.card.share .decide { justify-content: center; }
+
+@media print {
+  header.top, nav.tabs, .decide, details, #who { display: none !important; }
+  body { background: #fff; color: #000; padding: 0; }
+  main { max-width: none; padding: 0; }
+  .card { border: 0; box-shadow: none; page-break-inside: avoid; }
+  .card.share h3 { font-size: 28px; }
+  .card.share .meta { font-size: 16px; color: #333; text-align: center; }
+  .qr { width: 72vw; max-width: 600px; }
+  .url { font-size: 16px; color: #000; }
+}
