@@ -13,7 +13,7 @@ Until the GitHub repo exists, the laptop path works the same way by hand (bottom
 |---|---|---|
 | App runtime secrets (Anthropic key, DB, Google OAuth, SA key, bearer, session) | **Cloudflare Worker secrets** | `scripts/sync-secrets.sh`, from GCP Secret Manager — once, and on rotation |
 | Source of truth for the above | **GCP Secret Manager** (`solidstart-paper-archive`) | you, from your terminal (see `docs/setup.md`) |
-| CI credentials | **GitHub repo secrets** | you, once (below) |
+| CI credentials | **none** — CI authenticates to GCP keylessly (GitHub OIDC → Workload Identity Federation) and reads Secret Manager | set up 2026-09-20 |
 
 The Worker never reads Secret Manager at runtime; Cloudflare holds a copy. That is why
 `sync-secrets.sh` exists and why rotating a key is "new version in Secret Manager →
@@ -25,16 +25,20 @@ run the sync script".
    `git push -u origin main` (the SSH alias `github.com-solidstart` is already authorised).
 
 2. **Cloudflare API token.** dash.cloudflare.com → My Profile → API Tokens → Create →
-   template **Edit Cloudflare Workers**. Scope it to the `solidstart.jp` zone and your
-   account. Because the Worker uses a custom domain, the token also needs
-   **Zone → DNS → Edit** on `solidstart.jp` (the template does not include it; add it).
+   template **Edit Cloudflare Workers**, scoped to the `solidstart.jp` zone and your
+   account, **plus Zone → DNS → Edit** on `solidstart.jp` (the custom domain needs it).
+   Put it in Secret Manager — the only place it lives:
+   ```bash
+   printf '%s' '<token>' | gcloud secrets create CLOUDFLARE_API_TOKEN --project=solidstart-paper-archive --replication-policy=automatic --data-file=-
+   ```
 
-3. **GitHub repo secrets** (Settings → Secrets and variables → Actions):
-   - `CLOUDFLARE_API_TOKEN` — from step 2
-   - `CLOUDFLARE_ACCOUNT_ID` — dash.cloudflare.com → the account's overview sidebar
-   - `DATABASE_URL` — the Neon pooled string, so CI can apply migrations. Yes, this is a
-     second copy of one secret; CI has no GCP identity yet. (Keyless GitHub→GCP federation
-     would remove it; it is not worth the org-policy work today.)
+3. **GitHub secrets: none.** The deploy job gets a GitHub OIDC token, exchanges it at
+   Google's Workload Identity pool `github` (provider locked to
+   `silla-solidstart/paper-archive`), impersonates `paper-archive-ci@…` — a service
+   account whose only role is `secretmanager.secretAccessor` — and reads `DATABASE_URL`
+   and `CLOUDFLARE_API_TOKEN` from Secret Manager at run time. The account id is not a
+   secret and is written into the workflow. If you ever rename the repo, update the
+   provider's attribute condition.
 
 4. **Worker secrets, once:** `npx wrangler login` (browser), then `scripts/sync-secrets.sh`.
 

@@ -227,4 +227,5 @@ Laptop for now: `scripts/sync-secrets.sh && npx wrangler deploy` (after `npx wra
 once). Then https://pa.solidstart.jp/health, sign in there, and the **phone test** — camera,
 HEIC→JPEG via canvas, Add to Home Screen.
 
-CI/CD: see `docs/deploy.md` — GitHub Actions deploys `main`; three repo secrets to add.
+CI/CD: see `docs/deploy.md` — GitHub Actions deploys `main`, keylessly; the one thing to add is
+`CLOUDFLARE_API_TOKEN` in Secret Manager.

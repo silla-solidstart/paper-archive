@@ -10,6 +10,10 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Not a secret: it appears in every Cloudflare dashboard URL.
+  CLOUDFLARE_ACCOUNT_ID: 3a39a7add76ceae12541aa5e110afde0
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -25,12 +29,18 @@ jobs:
       - run: node scripts/verify-jwt.ts
 
   deploy:
-    # Merging to main is the human step. Worker secrets are not set here —
-    # they live in Cloudflare, put there once by scripts/sync-secrets.sh.
+    # Merging to main is the human step. No secrets live in GitHub: the job
+    # authenticates to Google Cloud keylessly (GitHub OIDC -> Workload Identity
+    # Federation -> a service account that can only read Secret Manager) and
+    # pulls what it needs from there. Worker runtime secrets are separate:
+    # they sit in Cloudflare, put there once by scripts/sync-secrets.sh.
     needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,16 +48,33 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+
+      - name: Authenticate to Google Cloud (keyless)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/318291773922/locations/global/workloadIdentityPools/github/providers/github
+          service_account: paper-archive-ci@solidstart-paper-archive.iam.gserviceaccount.com
+
+      - name: Read deploy secrets from Secret Manager
+        id: secrets
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          # Outputs are masked in logs.
+          secrets: |-
+            database_url:solidstart-paper-archive/DATABASE_URL
+            cloudflare_api_token:solidstart-paper-archive/CLOUDFLARE_API_TOKEN
+
       - name: Apply database migrations
         # Idempotent: applied files are skipped. Runs before the new code serves.
         run: npm run migrate
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ steps.secrets.outputs.database_url }}
+
       - name: Deploy to Cloudflare Workers
         run: npx wrangler deploy
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.secrets.outputs.cloudflare_api_token }}
+
       - name: Smoke
         run: |
           for i in $(seq 1 10); do
