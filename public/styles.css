@@ -155,9 +155,9 @@ dl.fields dd { margin: 0; word-break: break-word; }
 }
 
 /* admin */
-table.admin { width: 100%; border-collapse: collapse; font-size: 14px; }
-table.admin th, table.admin td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
-table.admin th { color: var(--muted); font-weight: 500; font-size: 12px; }
+.allow { margin-top: 8px; }
+.allowrow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.allowrow .t { flex: 1; min-width: 0; font-size: 14px; } .allowrow .t b { font-weight: 500; word-break: break-all; }
 .addrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; }
 .addrow input, .addrow select { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 15px; }
 .addrow .full { grid-column: 1 / -1; }

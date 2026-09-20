@@ -73,7 +73,7 @@ const STR = {
     indexed: "indexed", not_indexed: "not indexed", open: "open", back_recent: "← Recent", delete: "Delete",
     confirm_delete: "Remove this document from the archive? The Drive file is moved to trash.",
     delete_failed: (m) => `Delete failed: ${m}`, save_failed: (m) => `Could not save: ${m}`,
-    cost: (jpy, usd, tokens) => `Cost ≈ ¥${jpy} (US$${usd}) · ${tokens.toLocaleString()} tokens`,
+    cost: (jpy, usd, tokens) => `≈ ¥${jpy} (US$${usd}) · ${tokens.toLocaleString()} tokens`,
     cost_short: (jpy) => `≈ ¥${jpy}`,
     fields: { type: "Type", issuer: "Issuer", date: "Date", amount: "Amount", due: "Due", reference: "Reference", categories: "Categories", status: "Status", model: "Model", ocr: "OCR", lang: "Interpreted in", cost: "Cost", scanned_by: "Scanned by" },
     doctype: { tax_notice: "Tax notice", government_notice: "Government notice", utility_bill: "Utility bill", insurance: "Insurance", bank_statement: "Bank statement", invoice: "Invoice", receipt: "Receipt", school_letter: "School letter", medical: "Medical", contract: "Contract", subscription: "Subscription", advertisement: "Advertisement", other: "Other" },
@@ -88,12 +88,12 @@ const STR = {
     shared_by: (n) => `Shared by ${n}`,
     invites: "Share this archive", invite_hint: "Show the QR or send the link. It works for 7 days, up to 10 people; they sign in with Google and see everything in this archive.",
     create_invite: "Create invite link", copy: "Copy link", copied: "Copied", revoke: "Revoke", expires: (d) => `expires ${d}`, uses: (u, m) => `${u}/${m} used`,
-    where_files_go: (name) => `Files scanned into this space are stored in the space owner's Google Drive, under Paper Archive / ${name}.`,
+    where_files_go: (name) => `Files scanned into this archive are stored in its owner's Google Drive, under Paper Archive / ${name}.`,
     join_title: "Join a space", join_desc: (space, by) => `You've been invited to <b>${esc(space)}</b>${by ? ` by ${esc(by)}` : ""}.`,
     join: "Join", joined: (name) => `You're in ${name}.`, invite_invalid: "This invite link is invalid.", invite_expired: "This invite link has expired or was used up.",
     switch_to: "Make default",
     share: "Share", share_app: "Share the app", share_app_hint: "Scan it. Know it. Let it go. Print this and put it where the mail lands.",
-    share_space: (n) => `Invite to ${n}`, share_space_hint: "Scan to join this space. The link works for 7 days, up to 10 people; they sign in with Google.",
+    share_space: (n, own) => own ? "Share your archive" : `Invite to ${n}`, share_space_hint: "Scan to join. The link works for 7 days, up to 10 people; they sign in with Google and see everything in this archive.",
     share_native: "Share…", print: "Print", open_link: "Open",
     signed_in_as: "Signed in as", take_photo: "Take a photo", upload: "Upload a file", api_token_link: "Use an API token", yours_short: "yours",
     admin: "Admin", admin_title: "Who can sign in", admin_hint: "Invite-only. Add an email, or @domain for everyone at a domain. Removal takes effect on their next request.",
@@ -127,7 +127,7 @@ const STR = {
     indexed: "登録済み", not_indexed: "未登録", open: "開く", back_recent: "← 最近", delete: "削除",
     confirm_delete: "この書類をアーカイブから削除しますか？ドライブのファイルはゴミ箱に移動します。",
     delete_failed: (m) => `削除に失敗: ${m}`, save_failed: (m) => `保存できませんでした: ${m}`,
-    cost: (jpy, usd, tokens) => `費用 約¥${jpy}（US$${usd}）・${tokens.toLocaleString()}トークン`,
+    cost: (jpy, usd, tokens) => `約¥${jpy}（US$${usd}）・${tokens.toLocaleString()}トークン`,
     cost_short: (jpy) => `約¥${jpy}`,
     fields: { type: "種類", issuer: "発行元", date: "日付", amount: "金額", due: "期限", reference: "番号", categories: "分類", status: "状態", model: "モデル", ocr: "OCR", lang: "解釈の言語", cost: "費用", scanned_by: "スキャン者" },
     doctype: { tax_notice: "納税通知書", government_notice: "行政からの通知", utility_bill: "公共料金", insurance: "保険", bank_statement: "銀行明細", invoice: "請求書", receipt: "領収書", school_letter: "学校からのお知らせ", medical: "医療", contract: "契約", subscription: "定期契約", advertisement: "広告", other: "その他" },
@@ -141,12 +141,12 @@ const STR = {
     shared_by: (n) => `${n} が共有`,
     invites: "このアーカイブを共有", invite_hint: "QRを見せるか、リンクを送ってください。7日間・最大10人まで有効。相手はGoogleでログインすると、このアーカイブの書類をすべて見られます。",
     create_invite: "招待リンクを作成", copy: "リンクをコピー", copied: "コピーしました", revoke: "無効化", expires: (d) => `有効期限 ${d}`, uses: (u, m) => `${u}/${m} 使用`,
-    where_files_go: (name) => `このスペースでスキャンした書類は、所有者のGoogleドライブ内「Paper Archive / ${name}」に保存されます。`,
+    where_files_go: (name) => `このアーカイブでスキャンした書類は、所有者のGoogleドライブ内「Paper Archive / ${name}」に保存されます。`,
     join_title: "スペースに参加", join_desc: (space, by) => `<b>${esc(space)}</b> に招待されています${by ? `（${esc(by)} から）` : ""}。`,
     join: "参加する", joined: (name) => `${name} に参加しました。`, invite_invalid: "この招待リンクは無効です。", invite_expired: "この招待リンクは期限切れか、使用回数の上限に達しています。",
     switch_to: "既定にする",
     share: "共有", share_app: "アプリを共有", share_app_hint: "撮る。わかる。手放せる。印刷して、郵便物の置き場に。",
-    share_space: (n) => `「${n}」に招待`, share_space_hint: "スキャンするとこのスペースに参加できます。リンクは7日間・最大10人まで有効。参加にはGoogleログインが必要です。",
+    share_space: (n, own) => own ? "自分のアーカイブを共有" : `「${n}」に招待`, share_space_hint: "スキャンすると参加できます。リンクは7日間・最大10人まで有効。相手はGoogleでログインすると、このアーカイブの書類をすべて見られます。",
     share_native: "共有…", print: "印刷", open_link: "開く",
     signed_in_as: "ログイン中", take_photo: "写真を撮る", upload: "ファイルを選ぶ", api_token_link: "APIトークンを使う", yours_short: "自分",
     admin: "管理", admin_title: "ログインできる人", admin_hint: "招待制です。メールアドレス、またはドメイン全体なら @ドメイン を追加します。削除は次のリクエストから反映されます。",
@@ -525,10 +525,10 @@ async function spaceView(id) {
 
   const ml = $("#members");
   for (const m of members) {
-    const row = document.createElement("div"); row.className = "row"; row.style.justifyContent = "space-between"; row.style.padding = "6px 0";
+    const row = document.createElement("div"); row.className = "allowrow";
     const canRemove = isOwner && m.role !== "owner";
-    row.innerHTML = `<span>${esc(m.name || m.email)} <span class="meta">${esc(m.email)}</span> <span class="pill">${m.role === "owner" ? t("owner") : t("member")}</span></span>
-      ${canRemove ? `<button class="small danger" data-rm="${m.user_id}" data-name="${esc(m.name || m.email)}">${t("remove")}</button>` : ""}`;
+    row.innerHTML = `<div class="t"><b>${esc(m.name || m.email)}</b> <span class="pill">${m.role === "owner" ? t("owner") : t("member")}</span><div class="meta">${esc(m.email)}</div></div>
+      ${canRemove ? `<button class="small danger" data-rm="${m.user_id}" data-name="${esc(m.name || m.email)}" title="${t("remove")}">${icon("trash-2")}</button>` : ""}`;
     ml.appendChild(row);
   }
   ml.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", async () => {
@@ -623,8 +623,7 @@ async function adminView() {
       <h3>${t("admin_title")}</h3>
       <div class="meta">${t("admin_hint")}</div>
       <div class="meta" style="margin-top:6px">${esc(t("admin_bootstrap", data.bootstrap || "—"))}</div>
-      <table class="admin" style="margin-top:10px"><thead><tr><th>${t("entry")}</th><th>${t("role")}</th><th>${t("note")}</th><th>${t("added")}</th><th></th></tr></thead>
-      <tbody id="rows"></tbody></table>
+      <div id="rows" class="allow"></div>
       <div class="addrow">
         <input id="newEntry" class="full" placeholder="${esc(t("entry"))}" autocomplete="off" inputmode="email">
         <input id="newNote" placeholder="${esc(t("note"))}">
@@ -639,10 +638,12 @@ async function adminView() {
       <div class="meta" style="margin-top:8px">US$${Number(costs.total_usd).toFixed(3)} · ${costs.users} user(s) · since ${costs.since ? String(costs.since).slice(0, 10) : "—"}</div></div>` : ""}`;
   const rows = $("#rows");
   for (const e of data.entries) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${esc(e.email)}</td><td>${e.role === "admin" ? t("role_admin") : t("role_member")}</td><td class="meta">${esc(e.note || "")}</td><td class="meta">${esc(String(e.created_at).slice(0, 10))}</td>
-      <td><button class="small danger" data-rm="${esc(e.email)}" title="${t("remove")}">${icon("trash-2")}</button></td>`;
-    rows.appendChild(tr);
+    const row = document.createElement("div");
+    row.className = "allowrow";
+    row.innerHTML = `<div class="t"><b>${esc(e.email)}</b>${e.role === "admin" ? ` <span class="pill">${t("role_admin")}</span>` : ""}
+        <div class="meta">${[e.note, String(e.created_at).slice(0, 10)].filter(Boolean).map(esc).join(" · ")}</div></div>
+      <button class="small danger" data-rm="${esc(e.email)}" title="${t("remove")}">${icon("trash-2")}</button>`;
+    rows.appendChild(row);
   }
   rows.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm(t("confirm_remove_entry", b.dataset.rm))) return;
@@ -686,7 +687,7 @@ async function shareView() {
     </div>
     ${canInvite ? `
     <div class="card share">
-      <h3>${t("share_space", esc(state.space.name))}</h3>
+      <h3>${t("share_space", esc(state.space.name), state.space.role === "owner")}</h3>
       <div class="meta">${t("share_space_hint")}</div>
       <div class="qr" id="qrInvite"></div>
       <div class="url" id="inviteUrl"></div>
@@ -781,7 +782,7 @@ function resultCard(data) {
     <div class="keep" id="keep">${retentionLabel(x.retention)} <span class="meta">— ${esc(x.retention_reason)}</span></div>
     ${data.id ? decideButtons(data.id) : ""}
     ${drive}
-    ${data.cost ? `<div class="meta">${esc(costLine(data.cost))}</div>` : ""}
+    ${data.cost ? `<div class="meta">${t("fields").cost}: ${esc(costLine(data.cost))}</div>` : ""}
     <details><summary class="meta">${t("ocr", data.ocr.pages, data.ocr.chars)} · ${data.id ? `<a href="#/doc/${data.id}">${t("open")}</a>` : t("not_indexed")}</summary><pre>${esc(data.ocr.text)}</pre></details>`;
   if (data.id) wireDecide(el, data.id);
   return el;
